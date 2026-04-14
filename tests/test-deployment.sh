@@ -7,7 +7,7 @@ set -euo pipefail
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=fixtures/test-helper.sh
+# shellcheck source=/dev/null
 source "$REPO_DIR/tests/fixtures/test-helper.sh"
 
 echo "=== test-deployment.sh ==="

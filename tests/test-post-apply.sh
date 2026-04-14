@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=fixtures/test-helper.sh
+# shellcheck source=/dev/null
 source "$REPO_DIR/tests/fixtures/test-helper.sh"
 
 echo "=== test-post-apply.sh ==="
