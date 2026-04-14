@@ -70,7 +70,7 @@ assert_file_contains "$TMPDIR/project.config.sh" 'CAPTURE_FORM_ID="mock-form-id-
 assert_file_contains "$TMPDIR/project.config.sh" 'LIST_ID="mock-list-id-789"' "LIST_ID same after re-run"
 
 # Count lines to ensure no duplication
-line_count=$(wc -l < "$TMPDIR/project.config.sh")
+line_count=$(wc -l < "$TMPDIR/project.config.sh" | tr -d ' ')
 assert_equal "$line_count" "9" "config file still has 9 lines (no duplication)"
 
 test_summary
