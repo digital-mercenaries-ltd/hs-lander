@@ -25,11 +25,12 @@ HUBSPOT_TOKEN=$(security find-generic-password \
 
 API_BASE="https://api.hubapi.com/cms/v3/source-code/developer/content"
 
-# Upload each file in dist/
+# Upload each file in dist/.
+# Use process substitution (not pipe) so counters stay in the parent shell.
 uploaded=0
 failed=0
 
-find "$DIST_DIR" -type f | while read -r file; do
+while IFS= read -r file; do
   relative_path="${file#$DIST_DIR/}"
   dm_path="${DM_UPLOAD_PATH}/${relative_path}"
 
@@ -48,7 +49,7 @@ find "$DIST_DIR" -type f | while read -r file; do
     echo "FAILED ($http_code)"
     failed=$((failed + 1))
   fi
-done
+done < <(find "$DIST_DIR" -type f)
 
 echo ""
 echo "Upload complete: $uploaded succeeded, $failed failed"
