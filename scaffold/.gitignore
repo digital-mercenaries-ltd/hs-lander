@@ -1,0 +1,22 @@
+# Secrets — never commit
+project.config.sh
+
+# Build output
+dist/
+
+# Node
+node_modules/
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+*.tfplan
+
+# HubSpot CLI (not used in core workflow)
+hubspot.config.yml
+
+# IDE / OS
+.claude/
+.DS_Store

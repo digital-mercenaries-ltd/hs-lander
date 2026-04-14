@@ -1,0 +1,76 @@
+# .github/workflows/smoke.yml
+# Manual trigger or release tags. Deploys to real HubSpot and verifies.
+name: Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  deploy-and-verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7"
+
+      - name: Store token in Keychain
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: |
+          security add-generic-password \
+            -s "smoke-hubspot-access-token" \
+            -a "$USER" -w "$HUBSPOT_TOKEN"
+
+      - name: Scaffold test project
+        run: |
+          mkdir -p /tmp/smoke-test
+          cp -r scaffold/* /tmp/smoke-test/
+          cp -r scripts/ /tmp/smoke-test/scripts/
+          mkdir -p /tmp/smoke-test/src/templates /tmp/smoke-test/src/css \
+                   /tmp/smoke-test/src/js /tmp/smoke-test/src/emails
+          cp tests/fixtures/src/templates/* /tmp/smoke-test/src/templates/
+          cp tests/fixtures/src/css/* /tmp/smoke-test/src/css/
+          cp tests/fixtures/src/js/* /tmp/smoke-test/src/js/
+          cp tests/fixtures/src/emails/* /tmp/smoke-test/src/emails/
+
+      - name: Write smoke test config
+        env:
+          HUBSPOT_PORTAL_ID: ${{ secrets.HUBSPOT_PORTAL_ID }}
+          HUBSPOT_REGION: ${{ secrets.HUBSPOT_REGION }}
+          SMOKE_DOMAIN: ${{ secrets.SMOKE_DOMAIN }}
+        run: |
+          cat > /tmp/smoke-test/project.config.sh <<EOF
+          HUBSPOT_PORTAL_ID="$HUBSPOT_PORTAL_ID"
+          HUBSPOT_REGION="$HUBSPOT_REGION"
+          DOMAIN="$SMOKE_DOMAIN"
+          KEYCHAIN_PREFIX="smoke"
+          DM_UPLOAD_PATH="/smoke-test"
+          GA4_MEASUREMENT_ID="G-SMOKETEST"
+          CAPTURE_FORM_ID=""
+          SURVEY_FORM_ID=""
+          LIST_ID=""
+          EOF
+
+      - name: Build
+        run: cd /tmp/smoke-test && bash scripts/build.sh
+
+      - name: Terraform init + apply
+        run: cd /tmp/smoke-test && bash scripts/tf.sh init && bash scripts/tf.sh apply -auto-approve
+
+      - name: Post-apply
+        run: cd /tmp/smoke-test && bash scripts/post-apply.sh
+
+      - name: Deploy to Design Manager
+        run: cd /tmp/smoke-test && bash scripts/deploy.sh
+
+      - name: Run deployment tests
+        run: bash tests/test-deployment.sh /tmp/smoke-test
+
+      - name: Terraform destroy (cleanup)
+        if: always()
+        run: cd /tmp/smoke-test && bash scripts/tf.sh destroy -auto-approve || true

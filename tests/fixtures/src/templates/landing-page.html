@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Landing Page | __DOMAIN__</title>
+  <link rel="stylesheet" href="{{ get_asset_url('__DM_PATH__/css/main.css') }}">
+</head>
+<body>
+  <h1>Welcome</h1>
+  <div id="capture-form"></div>
+  <script src="//__HSFORMS_HOST__/forms/embed/v2.js"></script>
+  <script>
+    hbspt.forms.create({
+      region: '__REGION__',
+      portalId: '__PORTAL_ID__',
+      formId: '__CAPTURE_FORM_ID__',
+      target: '#capture-form'
+    });
+  </script>
+  <script src="{{ get_asset_url('__DM_PATH__/js/tracking.js') }}"></script>
+</body>
+</html>

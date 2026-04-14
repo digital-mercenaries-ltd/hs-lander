@@ -1,0 +1,16 @@
+{
+  "name": "hs-lander-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HubSpot landing page project (scaffolded by hs-lander)",
+  "scripts": {
+    "build": "bash scripts/build.sh",
+    "setup": "bash scripts/build.sh && bash scripts/tf.sh apply -auto-approve",
+    "post-apply": "bash scripts/post-apply.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "watch": "bash scripts/watch.sh",
+    "tf:init": "bash scripts/tf.sh init",
+    "tf:plan": "bash scripts/tf.sh plan",
+    "destroy": "bash scripts/tf.sh destroy -auto-approve"
+  }
+}
