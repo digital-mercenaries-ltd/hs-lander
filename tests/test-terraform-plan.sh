@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=fixtures/test-helper.sh
 source "$REPO_DIR/tests/fixtures/test-helper.sh"
 
 echo "=== test-terraform-plan.sh ==="

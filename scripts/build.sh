@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Source config
+# shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
 
 # Derive HSFORMS_HOST from region

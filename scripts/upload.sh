@@ -6,6 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
 
 DIST_DIR="$PROJECT_DIR/dist"
@@ -31,7 +32,7 @@ uploaded=0
 failed=0
 
 while IFS= read -r file; do
-  relative_path="${file#$DIST_DIR/}"
+  relative_path="${file#"$DIST_DIR"/}"
   dm_path="${DM_UPLOAD_PATH}/${relative_path}"
 
   echo -n "  Uploading ${dm_path}... "

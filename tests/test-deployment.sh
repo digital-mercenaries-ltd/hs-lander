@@ -7,11 +7,13 @@ set -euo pipefail
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=fixtures/test-helper.sh
 source "$REPO_DIR/tests/fixtures/test-helper.sh"
 
 echo "=== test-deployment.sh ==="
 echo "Project: $PROJECT_DIR"
 
+# shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
 
 # Read token from Keychain
