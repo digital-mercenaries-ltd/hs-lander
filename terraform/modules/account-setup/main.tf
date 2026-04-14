@@ -5,6 +5,15 @@
 #
 # The restapi provider is inherited from the root module.
 
+terraform {
+  required_providers {
+    restapi = {
+      source  = "Mastercard/restapi"
+      version = "~> 1.19"
+    }
+  }
+}
+
 resource "restapi_object" "project_source_property" {
   path          = "/crm/v3/properties/contacts"
   id_attribute  = "name"
