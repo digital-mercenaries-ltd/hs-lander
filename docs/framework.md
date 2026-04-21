@@ -110,6 +110,7 @@ Future service references (GA4 service account, Cloudflare API token, etc.) foll
 
 | Check | States | Detail shape |
 |---|---|---|
+| `PREFLIGHT_TOOLS_REQUIRED` | `ok` \| `missing` | `missing` is followed by a comma-list of absent tools (`curl`, `jq`, `terraform`, `npm`). This check runs first; if any required tool is absent, preflight emits `skipped (required tools missing)` for every other contract line and exits 1 |
 | `PREFLIGHT_PROJECT_POINTER` | `ok` \| `missing` \| `incomplete` | Missing vars listed when `incomplete` (e.g. `HS_LANDER_ACCOUNT HS_LANDER_PROJECT`) |
 | `PREFLIGHT_ACCOUNT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | When `missing`: absolute path. When `incomplete`: comma-list of missing fields |
 | `PREFLIGHT_PROJECT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | Same shape as `ACCOUNT_PROFILE` |
@@ -120,6 +121,7 @@ Future service references (GA4 service account, Cloudflare API token, etc.) foll
 | `PREFLIGHT_DNS` | `ok` \| `missing` \| `skipped` | On `missing`, detail includes the expected CNAME target (`<portal-id>.group0.sites.hscoscdn-<region>.net`) so the user knows which record to create |
 | `PREFLIGHT_GA4` | `ok` \| `warn` | `warn` when `GA4_MEASUREMENT_ID` is empty (analytics won't fire, but build/deploy still works) |
 | `PREFLIGHT_FORM_IDS` | `ok` \| `warn` | `warn` when `CAPTURE_FORM_ID` is empty (expected before first deploy; populated by `post-apply`) |
+| `PREFLIGHT_TOOLS_OPTIONAL` | `ok` \| `warn` \| `skipped` | `warn` is followed by a comma-list of absent optional tools (`pandoc`, `pdftotext`, `git`). Non-blocking — these only affect specific skill workflows (source ingest, repo operations). `skipped` only when required tools are missing |
 
 Credential safety: the HubSpot token is read into a local shell variable, used for the three API probes (account-info, project_source, scopes introspection), and unset via EXIT trap. xtrace is disabled around the token-handling block so `bash -x scripts/preflight.sh` does not leak the token either.
 
@@ -127,5 +129,14 @@ Credential safety: the HubSpot token is read into a local shell variable, used f
 
 - HubSpot Marketing Hub Starter + Content Hub Starter
 - Service Key with scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.schemas.contacts.write`, `crm.lists.read`, `crm.lists.write`, `forms`, `content` (7 scopes — `content` covers the marketing email resource via `/marketing/v3/emails`)
-- Terraform CLI
 - macOS with Keychain (for local development)
+
+### CLI tools
+
+The framework requires `curl`, `jq`, `terraform`, and `npm` at runtime. Optional tools `pandoc`, `pdftotext`, and `git` extend specific features (source ingest, version control). Run `bash scripts/preflight.sh` to verify — it reports missing tools via `PREFLIGHT_TOOLS_REQUIRED` and `PREFLIGHT_TOOLS_OPTIONAL` lines.
+
+On macOS (Homebrew):
+
+```bash
+brew install curl jq terraform node pandoc poppler git   # poppler provides pdftotext; node ships npm
+```

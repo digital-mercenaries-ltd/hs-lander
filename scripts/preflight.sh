@@ -30,6 +30,48 @@ token=""
 scopes_body_file=""
 trap 'unset token; [[ -n "$scopes_body_file" ]] && rm -f "$scopes_body_file"' EXIT
 
+# --- TOOLS_REQUIRED ---
+# Runs first so tool availability is reported even when config is unset.
+# `command -v` is safe under xtrace — no secrets expanded here.
+# If any required tool is missing, nothing downstream can run meaningfully, so
+# emit skipped for every remaining check (including TOOLS_OPTIONAL) to keep
+# the 12-line contract intact and exit 1.
+_required_tools=(curl jq terraform npm)
+_tools_missing=()
+for _t in "${_required_tools[@]}"; do
+  command -v "$_t" >/dev/null 2>&1 || _tools_missing+=("$_t")
+done
+if [[ ${#_tools_missing[@]} -eq 0 ]]; then
+  echo "PREFLIGHT_TOOLS_REQUIRED=ok"
+else
+  _missing_csv=$(IFS=,; echo "${_tools_missing[*]}")
+  echo "PREFLIGHT_TOOLS_REQUIRED=missing $_missing_csv"
+  for _check in PROJECT_POINTER ACCOUNT_PROFILE PROJECT_PROFILE CREDENTIAL \
+                API_ACCESS SCOPES PROJECT_SOURCE DNS GA4 FORM_IDS TOOLS_OPTIONAL; do
+    echo "PREFLIGHT_${_check}=skipped (required tools missing)"
+  done
+  exit 1
+fi
+unset _required_tools _tools_missing _t _missing_csv _check
+
+# Helper: emit PREFLIGHT_TOOLS_OPTIONAL. Called at the end of the script and
+# also before any early `exit 1` in the config-discovery branches so the
+# contract's 12-line ordering is preserved regardless of exit path.
+_emit_tools_optional() {
+  local optional_tools=(pandoc pdftotext git)
+  local optional_missing=() t
+  for t in "${optional_tools[@]}"; do
+    command -v "$t" >/dev/null 2>&1 || optional_missing+=("$t")
+  done
+  if [[ ${#optional_missing[@]} -eq 0 ]]; then
+    echo "PREFLIGHT_TOOLS_OPTIONAL=ok"
+  else
+    local missing_csv
+    missing_csv=$(IFS=,; echo "${optional_missing[*]}")
+    echo "PREFLIGHT_TOOLS_OPTIONAL=warn $missing_csv"
+  fi
+}
+
 # --- Config discovery ---
 # Three discrete checks: PROJECT_POINTER → ACCOUNT_PROFILE → PROJECT_PROFILE.
 # Each validates file existence and required fields before the next check
@@ -122,6 +164,7 @@ if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
   echo "PREFLIGHT_DNS=skipped (no project pointer)"
   echo "PREFLIGHT_GA4=skipped (no project pointer)"
   echo "PREFLIGHT_FORM_IDS=skipped (no project pointer)"
+  _emit_tools_optional
   exit 1
 fi
 
@@ -143,6 +186,7 @@ if [[ -z "${HS_LANDER_ACCOUNT:-}" || -z "${HS_LANDER_PROJECT:-}" ]]; then
   echo "PREFLIGHT_DNS=skipped (pointer incomplete)"
   echo "PREFLIGHT_GA4=skipped (pointer incomplete)"
   echo "PREFLIGHT_FORM_IDS=skipped (pointer incomplete)"
+  _emit_tools_optional
   exit 1
 fi
 
@@ -439,6 +483,9 @@ if [[ -z "${CAPTURE_FORM_ID:-}" ]]; then
 else
   echo "PREFLIGHT_FORM_IDS=ok"
 fi
+
+# --- TOOLS_OPTIONAL ---
+_emit_tools_optional
 
 [[ $required_failed -eq 0 ]] || exit 1
 exit 0
