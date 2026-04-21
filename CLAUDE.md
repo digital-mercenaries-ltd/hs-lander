@@ -79,7 +79,7 @@ hs-lander/
 │   ├── upload.sh            ← PUT files to CMS Source Code API (no CLI needed)
 │   ├── watch.sh             ← build + poll for changes
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
-│   ├── preflight.sh         ← validate config/credential/API before build/deploy
+│   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering config, credential, API, scopes, DNS
 │   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
 │   └── hs-curl.sh           ← Keychain → curl HubSpot API
 ├── scaffold/                ← Template for new projects
