@@ -7,12 +7,12 @@ variable "hubspot_portal_id" {
 
 variable "project_slug" {
   type        = string
-  description = "Short project identifier (e.g. heard). Used for resource naming and contact segmentation."
+  description = "Short project identifier (e.g. my-project). Used for resource naming and contact segmentation."
 }
 
 variable "domain" {
   type        = string
-  description = "Page domain (e.g. heard.digitalmercenaries.ai)"
+  description = "Page domain (e.g. landing.example.com)"
 }
 
 variable "landing_slug" {

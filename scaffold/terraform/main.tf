@@ -56,7 +56,7 @@ module "landing_page" {
   email_name             = "PROJECT — Welcome"
   email_subject          = "Welcome"
   email_from_name        = "PROJECT"
-  email_reply_to         = "PROJECT@digitalmercenaries.ai"
+  email_reply_to         = "PROJECT@example.com"
   email_body_path        = "${path.module}/../dist/emails/welcome-body.html"
   page_landing_name      = "PROJECT — Landing Page"
   page_landing_title     = "PROJECT"

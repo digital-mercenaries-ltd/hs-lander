@@ -1,0 +1,13 @@
+# Claude Code session metadata
+.claude/
+
+# Terraform working files (in test harness)
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfplan
+**/*.tfstate
+**/*.tfstate.backup
+tests/fixtures/terraform/plan.txt
+
+# OS
+.DS_Store
