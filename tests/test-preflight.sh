@@ -18,6 +18,7 @@ assert_file_exists "$REPO_DIR/scripts/preflight.sh" "scripts/preflight.sh exists
 # picture and coach the user wrongly — this assertion catches that regression
 # class.
 PREFLIGHT_CONTRACT_KEYS=(
+  PREFLIGHT_TOOLS_REQUIRED
   PREFLIGHT_PROJECT_POINTER
   PREFLIGHT_ACCOUNT_PROFILE
   PREFLIGHT_PROJECT_PROFILE
@@ -28,6 +29,7 @@ PREFLIGHT_CONTRACT_KEYS=(
   PREFLIGHT_DNS
   PREFLIGHT_GA4
   PREFLIGHT_FORM_IDS
+  PREFLIGHT_TOOLS_OPTIONAL
 )
 assert_full_contract() {
   local log="$1" scenario="$2"
@@ -206,6 +208,19 @@ echo "93.184.216.34"
 exit 0
 MOCK
   chmod +x "$dir/mock-bin/dig"
+
+  # Shims for CLI tools preflight checks for availability via `command -v`.
+  # The body is a noop — preflight only cares about presence. Tests that want
+  # to simulate a missing tool can `rm` the specific shim and use
+  # run_preflight_sanitised to prevent the system copy from being found on PATH.
+  local tool
+  for tool in jq terraform npm pandoc pdftotext git; do
+    cat > "$dir/mock-bin/$tool" <<'MOCK'
+#!/usr/bin/env bash
+exit 0
+MOCK
+    chmod +x "$dir/mock-bin/$tool"
+  done
 }
 
 run_preflight_capture() {
@@ -214,6 +229,46 @@ run_preflight_capture() {
   # mock curl's per-endpoint response, scopes body, or simulated exit failure.
   local dir="$1" log="$2"
   HOME="$dir/home" PATH="$dir/mock-bin:$PATH" \
+    MOCK_CURL_ACCOUNT_INFO_CODE="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" \
+    MOCK_CURL_PROJECT_SOURCE_CODE="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" \
+    MOCK_CURL_SCOPES_CODE="${MOCK_CURL_SCOPES_CODE:-200}" \
+    MOCK_CURL_SCOPES_LIST="${MOCK_CURL_SCOPES_LIST-}" \
+    MOCK_CURL_SCOPES_BODY="${MOCK_CURL_SCOPES_BODY-}" \
+    MOCK_CURL_FAIL="${MOCK_CURL_FAIL-}" \
+    MOCK_DIG_EMPTY="${MOCK_DIG_EMPTY-}" \
+    bash "$dir/project/scripts/preflight.sh" >"$log" 2>&1
+  echo "$?"
+}
+
+# Variant that uses a sanitised PATH: the caller's mock-bin plus a private
+# sysbin containing symlinks to ONLY the system utilities preflight itself
+# depends on (awk, sed, tr, mktemp, etc.). Notably, jq is NOT symlinked —
+# some macOS installs ship /usr/bin/jq, which would otherwise mask a `rm`
+# of the mock-bin jq shim. Anything preflight checks for via `command -v`
+# (jq, terraform, npm, pandoc, pdftotext, git) MUST come only from mock-bin.
+_build_sysbin() {
+  # Mirror /usr/bin and /bin into a private sysbin via symlinks, then remove
+  # the specific tools we want to simulate as missing. Using a blacklist is
+  # more robust than a whitelist — preflight (and bash itself) touch a wide
+  # set of system utilities, and enumerating them all is fragile.
+  local dir="$1" sysbin="$dir/sysbin" src entry
+  local blacklist=(jq terraform npm pandoc pdftotext git)
+  mkdir -p "$sysbin"
+  for src in /usr/bin /bin; do
+    for entry in "$src"/*; do
+      [[ -x "$entry" && ! -d "$entry" ]] || continue
+      ln -sf "$entry" "$sysbin/$(basename "$entry")"
+    done
+  done
+  for entry in "${blacklist[@]}"; do
+    rm -f "$sysbin/$entry"
+  done
+}
+
+run_preflight_sanitised() {
+  local dir="$1" log="$2"
+  _build_sysbin "$dir"
+  HOME="$dir/home" PATH="$dir/mock-bin:$dir/sysbin" \
     MOCK_CURL_ACCOUNT_INFO_CODE="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" \
     MOCK_CURL_PROJECT_SOURCE_CODE="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" \
     MOCK_CURL_SCOPES_CODE="${MOCK_CURL_SCOPES_CODE:-200}" \
@@ -242,6 +297,8 @@ assert_equal "$exit1" "0" "exit code 0 when all checks pass"
 assert_file_contains "$LOG1" "PREFLIGHT_CREDENTIAL=found" "credential found"
 assert_file_contains "$LOG1" "PREFLIGHT_API_ACCESS=ok" "API access ok"
 assert_file_contains "$LOG1" "PREFLIGHT_DNS=ok" "DNS check ok"
+assert_file_contains "$LOG1" "^PREFLIGHT_TOOLS_REQUIRED=ok" "required tools reported ok"
+assert_file_contains "$LOG1" "^PREFLIGHT_TOOLS_OPTIONAL=ok" "optional tools reported ok"
 assert_full_contract "$LOG1" "Scenario 1"
 
 # --- Scenario 2: HUBSPOT_TOKEN_KEYCHAIN_SERVICE empty in account config →
@@ -584,7 +641,98 @@ assert_equal "$exitN2" "0" "unquoted+export pointer parses successfully (exit 0)
 assert_file_contains "$LOGN2" "PREFLIGHT_PROJECT_POINTER=ok" "pointer reported ok with unquoted+export values"
 assert_file_contains "$LOGN2" "PREFLIGHT_ACCOUNT_PROFILE=ok" "downstream ACCOUNT_PROFILE=ok proves unquoted+export resolved"
 
+# --- Scenario O: TOOLS_REQUIRED missing (terraform deleted from PATH) ---
+# Required tool absent → TOOLS_REQUIRED=missing, exit 1, and all 11 remaining
+# contract lines emit =skipped (required tools missing). Uses the sanitised
+# PATH runner so a Homebrew-installed terraform on the host doesn't mask the
+# deletion.
+
+echo ""
+echo "--- Scenario O: TOOLS_REQUIRED=missing (terraform absent) ---"
+TMPO=$(setup_env)
+write_account_config "$TMPO"
+write_project_config "$TMPO"
+write_project_sourcing_chain "$TMPO"
+write_mock_bin "$TMPO"
+rm "$TMPO/mock-bin/terraform"
+LOGO="$TMPO/preflight.log"
+exitO=$(run_preflight_sanitised "$TMPO" "$LOGO" || true)
+assert_equal "$exitO" "1" "exit 1 when a required tool is missing"
+assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_REQUIRED=missing terraform$" "TOOLS_REQUIRED names the missing tool"
+assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools missing)" "downstream check skipped with reason"
+assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
+assert_full_contract "$LOGO" "Scenario O"
+preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
+assert_equal "$preflight_line_count" "12" "exactly 12 PREFLIGHT_* lines when required tool missing"
+
+# --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
+# Two tools missing: csv list in the detail.
+
+echo ""
+echo "--- Scenario O2: TOOLS_REQUIRED=missing (jq + npm absent) ---"
+TMPO2=$(setup_env)
+write_account_config "$TMPO2"
+write_project_config "$TMPO2"
+write_project_sourcing_chain "$TMPO2"
+write_mock_bin "$TMPO2"
+rm "$TMPO2/mock-bin/jq" "$TMPO2/mock-bin/npm"
+LOGO2="$TMPO2/preflight.log"
+exitO2=$(run_preflight_sanitised "$TMPO2" "$LOGO2" || true)
+assert_equal "$exitO2" "1" "exit 1 when multiple required tools missing"
+assert_file_contains "$LOGO2" "^PREFLIGHT_TOOLS_REQUIRED=missing jq,npm$" "TOOLS_REQUIRED lists tools as csv in stable order"
+
+# --- Scenario P: TOOLS_OPTIONAL=warn (pandoc missing) ---
+# Optional tool missing → warn, NOT missing. Exit code unaffected (0 when
+# everything else is fine). Downstream checks still run normally.
+
+echo ""
+echo "--- Scenario P: TOOLS_OPTIONAL=warn (pandoc absent) ---"
+TMPP=$(setup_env)
+write_account_config "$TMPP"
+write_project_config "$TMPP"
+write_project_sourcing_chain "$TMPP"
+write_mock_bin "$TMPP"
+rm "$TMPP/mock-bin/pandoc"
+LOGP="$TMPP/preflight.log"
+exitP=$(run_preflight_sanitised "$TMPP" "$LOGP" || true)
+assert_equal "$exitP" "0" "exit 0 when only an optional tool is missing"
+assert_file_contains "$LOGP" "^PREFLIGHT_TOOLS_OPTIONAL=warn pandoc$" "TOOLS_OPTIONAL=warn names the missing tool"
+assert_file_contains "$LOGP" "^PREFLIGHT_TOOLS_REQUIRED=ok" "required tools still ok"
+assert_file_contains "$LOGP" "^PREFLIGHT_API_ACCESS=ok" "API access ran normally alongside optional-tool warning"
+
+# --- Scenario Q: TOOLS_OPTIONAL=warn with all three absent ---
+
+echo ""
+echo "--- Scenario Q: TOOLS_OPTIONAL=warn (all optional tools absent) ---"
+TMPQ=$(setup_env)
+write_account_config "$TMPQ"
+write_project_config "$TMPQ"
+write_project_sourcing_chain "$TMPQ"
+write_mock_bin "$TMPQ"
+rm "$TMPQ/mock-bin/pandoc" "$TMPQ/mock-bin/pdftotext" "$TMPQ/mock-bin/git"
+LOGQ="$TMPQ/preflight.log"
+exitQ=$(run_preflight_sanitised "$TMPQ" "$LOGQ" || true)
+assert_equal "$exitQ" "0" "exit 0 even with all optional tools missing"
+assert_file_contains "$LOGQ" "^PREFLIGHT_TOOLS_OPTIONAL=warn pandoc,pdftotext,git$" "TOOLS_OPTIONAL lists all three tools as csv in stable order"
+
+# --- Scenario R: line ordering — 12 PREFLIGHT_* lines in stable order ---
+# Guards against a refactor that puts TOOLS_OPTIONAL somewhere other than
+# the last line, or emits an out-of-order early-exit branch.
+
+echo ""
+echo "--- Scenario R: PREFLIGHT_* line ordering ---"
+TMPR=$(setup_env)
+write_account_config "$TMPR"
+write_project_config "$TMPR"
+write_project_sourcing_chain "$TMPR"
+write_mock_bin "$TMPR"
+LOGR="$TMPR/preflight.log"
+run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
+expected_order=$'PREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
+assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}"' EXIT
 
 test_summary
