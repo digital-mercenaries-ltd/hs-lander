@@ -8,32 +8,24 @@ hs-lander — a reusable HubSpot landing page framework. Terraform modules, buil
 
 **Owner:** Digital Mercenaries Ltd (`digital-mercenaries-ltd` GitHub org)
 
-## Current status
+## Status
 
-Greenfield TDD build — Session 2 of the orchestration plan.
+v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, three local test suites (39 assertions, all passing), and CI workflows are in place.
 
-**Spec:** `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/specs/2026-04-10-hs-lander-design.md`
-**Orchestration plan:** `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/plans/2026-04-10-hs-lander-orchestration.md`
+**Shipped:**
+- PR #1 merged to `main` (2026-04-14)
+- `v1.0.0` tag pushed on merge commit `115de6d`
 
-Read both files at the start of each session. The spec is the approved design. The orchestration plan's "Session 2" section describes what to build and its exit criteria.
+**Next:**
+- Account/project config hierarchy refactor — plan at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` (replaces `KEYCHAIN_PREFIX` with two-tier `~/.config/hs-lander/<account>/`)
+- Session 3: add `hs-lander` skill in `~/DocsLocal/skills/` per the orchestration plan
+- End-to-end deployment testing is being done manually via the Heard project at this stage; automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
 
-### TDD build order
-
-1. Write `test-build.sh` → implement `build.sh`
-2. Write `test-post-apply.sh` → implement `post-apply.sh`
-3. Implement remaining scripts: `tf.sh`, `hs-curl.sh`, `upload.sh`, `deploy.sh`, `watch.sh`
-4. Write `test-terraform-plan.sh` → implement Terraform modules (`account-setup`, `landing-page`)
-5. Create scaffold templates
-6. Write `test-deployment.sh` (passes only after a real deployment)
-7. Create CI workflows
-8. Tag `v1.0.0`
-
-### Exit criteria
-
-- All local tests pass (`test-build.sh`, `test-post-apply.sh`, `test-terraform-plan.sh`)
-- CI pipeline runs green on push
-- `v1.0.0` tag published
-- Scaffold can produce a working project directory
+**Reference docs:**
+- Design spec: `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/specs/2026-04-10-hs-lander-design.md`
+- Orchestration plan: `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/plans/2026-04-10-hs-lander-orchestration.md`
+- This repo's implementation plan: `docs/superpowers/plans/2026-04-10-hs-lander-framework.md`
+- Framework guide: `docs/framework.md`
 
 ## Commands
 
@@ -45,8 +37,9 @@ bash tests/test-build.sh
 bash tests/test-post-apply.sh
 bash tests/test-terraform-plan.sh
 
-# Run deployment test (requires live HubSpot — not for local dev)
-bash tests/test-deployment.sh
+# Run deployment test against a live project (requires HubSpot creds + a deployed project directory)
+# bash tests/test-deployment.sh /path/to/project
+# Nothing automated invokes this today — see roadmap v2.2 for the planned skill-driven e2e test.
 
 # Lint
 shellcheck scripts/*.sh tests/*.sh
@@ -98,9 +91,10 @@ hs-lander/
 │   ├── test-terraform-plan.sh ← Local, parses plan output
 │   └── test-deployment.sh   ← Network required, live HubSpot
 └── .github/workflows/
-    ├── ci.yml               ← Lint + build test + plan test (every push)
-    └── smoke.yml            ← Real deploy + verify (manual/release)
+    └── ci.yml               ← Lint + build test + plan test (every push)
 ```
+
+An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but archived to `docs/archive/workflows/smoke.yml` rather than shipped — see roadmap v2.2 for the intended skill-driven replacement.
 
 ### How the pieces connect
 

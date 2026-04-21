@@ -86,6 +86,6 @@ All credentials are stored in macOS Keychain. Scripts read them via `security fi
 ## Prerequisites
 
 - HubSpot Marketing Hub Starter + Content Hub Starter
-- Service Key with scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.schemas.contacts.write`, `crm.lists.read`, `crm.lists.write`, `forms`, `content`, `transactional-email`
+- Service Key with scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.schemas.contacts.write`, `crm.lists.read`, `crm.lists.write`, `forms`, `content` (7 scopes — `content` covers the marketing email resource via `/marketing/v3/emails`)
 - Terraform CLI
 - macOS with Keychain (for local development)
