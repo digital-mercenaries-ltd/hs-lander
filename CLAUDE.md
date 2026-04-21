@@ -16,11 +16,13 @@ v1.0.0 framework built (Session 2 of the orchestration plan complete). All scrip
 - PR #1 merged to `main` (2026-04-14) — v1.0.0 framework
 - PR #2 merged (2026-04-21) — post-v1.0.0 doc cleanup, roadmap, org/project-agnosticism enforcement
 - PR #3 merged (2026-04-21) — account/project config hierarchy, two-tier `~/.config/hs-lander/<account>/` config, `preflight.sh` validator, PAK path removed
-- Session 3 complete — `hs-lander` skill shipped in `~/DocsLocal/skills/`
+
+**In flight (elsewhere):**
+- Session 3: `hs-lander` skill in `~/DocsLocal/skills/` — drafted, under review iterations. Framework-compatibility feedback from that session has been flowing back to this repo (PR #4 is the current example).
 
 **Next:**
 - End-to-end deployment testing is done manually per-project at this stage; an automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
-- Session 4 onwards (per-project deployments — Heard, TSC) happens in per-project repos, not this one.
+- Session 4 onwards (per-project deployments) happens in per-project repos, not this one — waits on the skill landing.
 
 **Reference docs:**
 - Design spec: `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/specs/2026-04-10-hs-lander-design.md`
