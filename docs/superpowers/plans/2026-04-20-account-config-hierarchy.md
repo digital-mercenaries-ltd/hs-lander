@@ -100,6 +100,84 @@ source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
 
 ---
 
+## New script: preflight.sh
+
+The framework needs a single entry point that checks everything is ready before build/deploy. This replaces the inline shell snippets currently embedded in the skill.
+
+**`scripts/preflight.sh`** — sources config, validates everything, reports status. Exit 0 if ready, exit 1 if not. Output is structured so the skill (or a human) can parse what's done vs missing.
+
+```bash
+#!/usr/bin/env bash
+# preflight.sh — validate config, credentials, and HubSpot account readiness
+# Sources project.config.sh (which sources account + project configs)
+# Reports status of each prerequisite as CHECK_NAME=ok|missing|error
+#
+# Usage: bash scripts/preflight.sh
+# Exit 0: all checks pass. Exit 1: one or more checks failed (details on stdout).
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# --- Config discovery ---
+# CHECK: project.config.sh exists and is sourceable
+# CHECK: account config (HS_LANDER_ACCOUNT set, ~/.config/hs-lander/<account>/config.sh exists)
+# CHECK: project config (HS_LANDER_PROJECT set, ~/.config/hs-lander/<account>/<project>.sh exists)
+# CHECK: required variables non-empty after sourcing: HUBSPOT_PORTAL_ID, HUBSPOT_REGION, DOMAIN, PROJECT_SLUG, DM_UPLOAD_PATH
+# CHECK: HUBSPOT_TOKEN_KEYCHAIN_SERVICE is set
+
+# --- Credential validation ---
+# CHECK: Keychain entry exists for $HUBSPOT_TOKEN_KEYCHAIN_SERVICE
+#   (runs: security find-generic-password -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" -a "$USER" -w)
+#   IMPORTANT: token value is read into a variable, used for the API test, then unset.
+#   Never printed, logged, or passed to stdout.
+# CHECK: HubSpot API responds 200 to /account-info/v3/details with the token
+
+# --- HubSpot account readiness ---
+# CHECK: project_source CRM property exists
+#   (GET /crm/v3/properties/contacts/project_source — 200 = exists, 404 = first project on account)
+# CHECK: DNS resolves for $DOMAIN (dig +short, non-empty = ok)
+
+# --- Optional checks (non-blocking, reported as warnings) ---
+# WARN: GA4_MEASUREMENT_ID empty (analytics won't fire)
+# WARN: CAPTURE_FORM_ID empty (expected before first deploy, populated by post-apply)
+
+# --- Output format ---
+# Each check prints: PREFLIGHT_<NAME>=ok|missing|error|warn [detail]
+# Example:
+#   PREFLIGHT_CONFIG=ok
+#   PREFLIGHT_CREDENTIAL=ok
+#   PREFLIGHT_API_ACCESS=ok
+#   PREFLIGHT_PROJECT_SOURCE=missing (first project on this account — account-setup module needed)
+#   PREFLIGHT_DNS=ok heard.digitalmercenaries.ai resolves
+#   PREFLIGHT_GA4=warn GA4_MEASUREMENT_ID is empty
+#   PREFLIGHT_FORM_IDS=warn CAPTURE_FORM_ID is empty (expected before first deploy)
+```
+
+This script is deterministic, testable, and contains all the validation logic that was previously scattered across the skill's inline code blocks. The skill never needs to run `security`, `curl`, or `dig` directly — it runs `preflight.sh` and interprets the output.
+
+**Credential safety in preflight.sh:**
+- The token is read from Keychain into a local variable, used for the API test, then `unset`
+- The token value is NEVER printed to stdout, stderr, or any file
+- If the credential is missing, the script prints the Keychain service name and the `security add-generic-password` command the user should run — but never the token itself
+- The script does NOT ask for or accept token values as arguments or stdin
+
+### Test for preflight.sh
+
+**`tests/test-preflight.sh`** — local, validates the reporting logic:
+
+Assertions:
+- With complete config: all checks report `ok`
+- With missing `HUBSPOT_TOKEN_KEYCHAIN_SERVICE`: reports `PREFLIGHT_CREDENTIAL=missing`
+- With empty `GA4_MEASUREMENT_ID`: reports `PREFLIGHT_GA4=warn`
+- With empty `CAPTURE_FORM_ID`: reports `PREFLIGHT_FORM_IDS=warn`
+- Output never contains actual token values (grep for known test token)
+- Exit code is 1 when any required check is `missing` or `error`
+
+Add to CI (`ci.yml`) alongside existing test suites.
+
+---
+
 ## Changes by file
 
 ### Scripts — replace KEYCHAIN_PREFIX with explicit service name
