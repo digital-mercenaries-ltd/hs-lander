@@ -251,7 +251,9 @@ _build_sysbin() {
   # the specific tools we want to simulate as missing. Using a blacklist is
   # more robust than a whitelist — preflight (and bash itself) touch a wide
   # set of system utilities, and enumerating them all is fragile.
-  local dir="$1" sysbin="$dir/sysbin" src entry
+  local dir="$1"
+  local sysbin="$dir/sysbin"
+  local src entry
   local blacklist=(jq terraform npm pandoc pdftotext git)
   mkdir -p "$sysbin"
   for src in /usr/bin /bin; do
