@@ -12,6 +12,31 @@ echo "=== test-preflight.sh ==="
 
 assert_file_exists "$REPO_DIR/scripts/preflight.sh" "scripts/preflight.sh exists"
 
+# Contract: preflight always emits these 10 PREFLIGHT_<KEY>= lines regardless
+# of state, so the skill can parse a complete output. Partial output (e.g.
+# from a script crash mid-stream) would make the skill see an incomplete
+# picture and coach the user wrongly — this assertion catches that regression
+# class.
+PREFLIGHT_CONTRACT_KEYS=(
+  PREFLIGHT_PROJECT_POINTER
+  PREFLIGHT_ACCOUNT_PROFILE
+  PREFLIGHT_PROJECT_PROFILE
+  PREFLIGHT_CREDENTIAL
+  PREFLIGHT_API_ACCESS
+  PREFLIGHT_SCOPES
+  PREFLIGHT_PROJECT_SOURCE
+  PREFLIGHT_DNS
+  PREFLIGHT_GA4
+  PREFLIGHT_FORM_IDS
+)
+assert_full_contract() {
+  local log="$1" scenario="$2"
+  local key
+  for key in "${PREFLIGHT_CONTRACT_KEYS[@]}"; do
+    assert_file_contains "$log" "^${key}=" "[$scenario] ${key}= line present"
+  done
+}
+
 # --- Shared setup helpers ---
 
 # Distinctive high-entropy token so partial-leak patterns (truncation,
@@ -217,6 +242,7 @@ assert_equal "$exit1" "0" "exit code 0 when all checks pass"
 assert_file_contains "$LOG1" "PREFLIGHT_CREDENTIAL=found" "credential found"
 assert_file_contains "$LOG1" "PREFLIGHT_API_ACCESS=ok" "API access ok"
 assert_file_contains "$LOG1" "PREFLIGHT_DNS=ok" "DNS check ok"
+assert_full_contract "$LOG1" "Scenario 1"
 
 # --- Scenario 2: missing HUBSPOT_TOKEN_KEYCHAIN_SERVICE → credential=missing, exit 1 ---
 
@@ -443,6 +469,7 @@ LOGA="$TMPA/preflight.log"
 exitA=$(run_preflight_capture "$TMPA" "$LOGA" || true)
 assert_equal "$exitA" "1" "exit 1 when project.config.sh is missing"
 assert_file_contains "$LOGA" "PREFLIGHT_PROJECT_POINTER=missing" "project pointer reported missing"
+assert_full_contract "$LOGA" "Scenario A"
 
 # --- Scenario B: ACCOUNT_PROFILE missing — account config file absent ---
 
@@ -458,6 +485,7 @@ LOGB="$TMPB/preflight.log"
 exitB=$(run_preflight_capture "$TMPB" "$LOGB" || true)
 assert_equal "$exitB" "1" "exit 1 when account config is missing"
 assert_file_contains "$LOGB" "PREFLIGHT_ACCOUNT_PROFILE=missing" "account profile reported missing"
+assert_full_contract "$LOGB" "Scenario B"
 
 # --- Scenario C: ACCOUNT_PROFILE incomplete — account config missing a required field ---
 
@@ -473,6 +501,7 @@ exitC=$(run_preflight_capture "$TMPC" "$LOGC" || true)
 assert_equal "$exitC" "1" "exit 1 when account config is incomplete"
 assert_file_contains "$LOGC" "PREFLIGHT_ACCOUNT_PROFILE=incomplete" "account profile reported incomplete"
 assert_file_contains "$LOGC" "HUBSPOT_PORTAL_ID" "incomplete detail lists the missing field"
+assert_full_contract "$LOGC" "Scenario C"
 
 # --- Scenario D: PROJECT_PROFILE missing — project config file absent ---
 
@@ -487,6 +516,7 @@ LOGD="$TMPD/preflight.log"
 exitD=$(run_preflight_capture "$TMPD" "$LOGD" || true)
 assert_equal "$exitD" "1" "exit 1 when project config is missing"
 assert_file_contains "$LOGD" "PREFLIGHT_PROJECT_PROFILE=missing" "project profile reported missing"
+assert_full_contract "$LOGD" "Scenario D"
 
 # Extend EXIT trap to include all temp dirs created above.
 trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}"' EXIT

@@ -39,35 +39,64 @@ trap 'unset token; [[ -n "$scopes_body_file" ]] && rm -f "$scopes_body_file"' EX
 # Helper: source a file in a subshell (with source builtin shadowed so cascading
 # sources don't fire) and print requested var assignments. Caller eval's the
 # output into the current shell.
-_extract_pointer_vars() {
-  # Extract the HS_LANDER_ACCOUNT and HS_LANDER_PROJECT assignments from the
-  # pointer file WITHOUT sourcing it (sourcing would fire the file's own
-  # cascading source calls, which may reference account/project config files
-  # that don't exist yet).
+_extract_pointer_var() {
+  # Extract the value of a single variable assignment from a shell-syntax
+  # file WITHOUT sourcing it (sourcing the pointer would fire its cascading
+  # `source` calls, which may reference account/project config files that
+  # don't exist yet).
   #
-  # Assumption: the scaffold template writes these as
-  #   HS_LANDER_ACCOUNT="<value>"
-  #   HS_LANDER_PROJECT="<value>"
-  # i.e. on their own lines, double-quoted, no fancy expansions. Anything
-  # that deviates from that pattern is effectively malformed for preflight's
-  # purposes and will surface as an "incomplete" POINTER result.
-  local path="$1"
-  local account project
-  account=$(sed -n -E 's/^[[:space:]]*HS_LANDER_ACCOUNT=[[:space:]]*"([^"]*)".*/\1/p' "$path" | head -1)
-  project=$(sed -n -E 's/^[[:space:]]*HS_LANDER_PROJECT=[[:space:]]*"([^"]*)".*/\1/p' "$path" | head -1)
-  printf 'HS_LANDER_ACCOUNT=%q\n' "$account"
-  printf 'HS_LANDER_PROJECT=%q\n' "$project"
+  # Supported forms:
+  #   VAR="value"
+  #   VAR='value'
+  #   VAR=value              (unquoted, up to whitespace or #)
+  #   export VAR="value"     (optional leading `export`)
+  #   VAR="value"  # comment (trailing comments ignored)
+  #
+  # Not supported: values that depend on expansion (e.g. VAR="$OTHER"). Those
+  # come back as the literal string — preflight will treat the resulting path
+  # as nonexistent and surface ACCOUNT_PROFILE/PROJECT_PROFILE as missing,
+  # which is a clearer signal to the user than silently proceeding.
+  local path="$1" var="$2"
+  awk -v V="$var" '
+    match($0, "^[[:space:]]*(export[[:space:]]+)?"V"=") {
+      rest = substr($0, RSTART + RLENGTH)
+      if (rest ~ /^"/) {
+        if (match(rest, /^"[^"]*"/)) { print substr(rest, 2, RLENGTH - 2); exit }
+      } else if (rest ~ /^\x27/) {
+        if (match(rest, /^\x27[^\x27]*\x27/)) { print substr(rest, 2, RLENGTH - 2); exit }
+      } else {
+        if (match(rest, /^[^[:space:]#]+/)) { print substr(rest, 1, RLENGTH); exit }
+      }
+    }
+  ' "$path"
 }
 
-# Helper: source a file normally in a subshell (cascades allowed) and print
+_extract_pointer_vars() {
+  local path="$1" v
+  for v in HS_LANDER_ACCOUNT HS_LANDER_PROJECT; do
+    printf '%s=%q\n' "$v" "$(_extract_pointer_var "$path" "$v")"
+  done
+}
+
+# Helper: source a file in an isolated subshell (cascades allowed) and print
 # requested vars. Used for account / project config files where we want the
 # file's own semantics but not the side effect on the parent shell.
+#
+# Limitation: if the sourced file itself sets `set -u` and then references an
+# unbound variable, bash exits the subshell before reaching the printf loop,
+# and `_source_vars` returns empty stdout. The parent then sees all requested
+# vars as empty and reports ACCOUNT_PROFILE/PROJECT_PROFILE=incomplete — a
+# plausible-looking but misleading diagnosis. The scaffold-shipped configs
+# don't set -u, so this is a theoretical concern. We re-assert `set +u` after
+# the source anyway so the loop is safe if the sourced file only disables
+# set -u lazily.
 _source_vars() {
   local path="$1"; shift
   (
     set +eu
     # shellcheck source=/dev/null
     source "$path" 2>/dev/null || true
+    set +u
     for v in "$@"; do
       printf '%s=%q\n' "$v" "${!v:-}"
     done
@@ -81,6 +110,7 @@ if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=skipped (no project pointer)"
   echo "PREFLIGHT_CREDENTIAL=skipped (no project pointer)"
   echo "PREFLIGHT_API_ACCESS=skipped (no project pointer)"
+  echo "PREFLIGHT_SCOPES=skipped (no project pointer)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (no project pointer)"
   echo "PREFLIGHT_DNS=skipped (no project pointer)"
   echo "PREFLIGHT_GA4=skipped (no project pointer)"
@@ -101,6 +131,7 @@ if [[ -z "${HS_LANDER_ACCOUNT:-}" || -z "${HS_LANDER_PROJECT:-}" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=skipped (pointer incomplete)"
   echo "PREFLIGHT_CREDENTIAL=skipped (pointer incomplete)"
   echo "PREFLIGHT_API_ACCESS=skipped (pointer incomplete)"
+  echo "PREFLIGHT_SCOPES=skipped (pointer incomplete)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (pointer incomplete)"
   echo "PREFLIGHT_DNS=skipped (pointer incomplete)"
   echo "PREFLIGHT_GA4=skipped (pointer incomplete)"
@@ -155,6 +186,7 @@ fi
 if [[ -z "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:-}" ]]; then
   echo "PREFLIGHT_CREDENTIAL=missing HUBSPOT_TOKEN_KEYCHAIN_SERVICE not set in account config"
   echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
+  echo "PREFLIGHT_SCOPES=skipped (no credential)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"
   required_failed=1
 else
@@ -341,30 +373,37 @@ fi
 # Prefer dig (most precise). Fall back to host, then getent. If none is
 # installed, report skipped rather than falsely claiming the domain doesn't
 # resolve — an adopter on a stripped-down Linux image shouldn't be blocked.
+# If DOMAIN itself is unset (e.g. PROJECT_PROFILE was missing or incomplete),
+# we have nothing to resolve — emit skipped rather than crashing under set -u.
 
-dns_result=""
-dns_tool=""
-if command -v dig >/dev/null 2>&1; then
-  dns_tool="dig"
-  dns_result=$(dig +short "$DOMAIN" 2>/dev/null || true)
-elif command -v host >/dev/null 2>&1; then
-  dns_tool="host"
-  dns_result=$(host -W 2 "$DOMAIN" 2>/dev/null | awk '/has address/ {print $4; exit}' || true)
-elif command -v getent >/dev/null 2>&1; then
-  dns_tool="getent"
-  dns_result=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1; exit}' || true)
-fi
-
-if [[ -z "$dns_tool" ]]; then
-  echo "PREFLIGHT_DNS=skipped (no DNS tool available — install dig or host)"
-elif [[ -n "$dns_result" ]]; then
-  echo "PREFLIGHT_DNS=ok $DOMAIN resolves"
+if [[ -z "${DOMAIN:-}" ]]; then
+  echo "PREFLIGHT_DNS=skipped (DOMAIN not set)"
 else
-  # Compute the expected HubSpot CNAME target so the skill can tell the user
-  # exactly which DNS record to create.
-  expected_cname="${HUBSPOT_PORTAL_ID}.group0.sites.hscoscdn-${HUBSPOT_REGION}.net"
-  echo "PREFLIGHT_DNS=missing $DOMAIN does not resolve (expected CNAME target: $expected_cname)"
-  required_failed=1
+  dns_result=""
+  dns_tool=""
+  if command -v dig >/dev/null 2>&1; then
+    dns_tool="dig"
+    dns_result=$(dig +short "$DOMAIN" 2>/dev/null || true)
+  elif command -v host >/dev/null 2>&1; then
+    dns_tool="host"
+    dns_result=$(host -W 2 "$DOMAIN" 2>/dev/null | awk '/has address/ {print $4; exit}' || true)
+  elif command -v getent >/dev/null 2>&1; then
+    dns_tool="getent"
+    dns_result=$(getent hosts "$DOMAIN" 2>/dev/null | awk '{print $1; exit}' || true)
+  fi
+
+  if [[ -z "$dns_tool" ]]; then
+    echo "PREFLIGHT_DNS=skipped (no DNS tool available — install dig or host)"
+  elif [[ -n "$dns_result" ]]; then
+    echo "PREFLIGHT_DNS=ok $DOMAIN resolves"
+  else
+    # Compute the expected HubSpot CNAME target so the skill can tell the
+    # user exactly which DNS record to create. If portal ID or region isn't
+    # known (incomplete account profile), the expected string is best-effort.
+    expected_cname="${HUBSPOT_PORTAL_ID:-<portal-id>}.group0.sites.hscoscdn-${HUBSPOT_REGION:-<region>}.net"
+    echo "PREFLIGHT_DNS=missing $DOMAIN does not resolve (expected CNAME target: $expected_cname)"
+    required_failed=1
+  fi
 fi
 
 # --- Warnings (non-blocking) ---
