@@ -145,7 +145,7 @@ The local account profile system (`~/.config/hs-lander/<account>/config.sh`) map
 
 | Local config | GitHub equivalent |
 |---|---|
-| Account `config.sh` values (portal ID, region) | Organisation-level secrets/variables in `digital-mercenaries-ltd` |
+| Account `config.sh` values (portal ID, region) | Organisation-level secrets/variables in the adopting GitHub org |
 | Project config values (slug, domain, GA4 ID) | Repository-level secrets/variables |
 | `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` + Keychain | Organisation secret `HUBSPOT_TOKEN` (the actual token value) |
 

@@ -14,6 +14,8 @@ Replace the flat `project.config.sh` + `KEYCHAIN_PREFIX` derivation pattern with
 
 The framework must remain organisation- and project-agnostic. No org or project names in scripts, Terraform modules, scaffold, tests, or user-facing docs (README, framework guide, roadmap). Plans and historical records under `docs/superpowers/plans/` may carry DML-specific context for the original implementation, but the grep verification step below enforces agnosticism for everything that will be adopted by other orgs.
 
+**One exception:** the framework's own hosting URL (`github.com/digital-mercenaries-ltd/hs-lander`) appears in the scaffold's Terraform `source =` lines and in the README's canonical usage example. This is a required self-reference — the source URL has to point *somewhere*, and this repo is the canonical home. Adopters who fork will update the URL to their fork; the default simply points at the canonical source. The verification grep below uses patterns that don't match the hyphenated `digital-mercenaries-ltd` form precisely so the legitimate self-reference doesn't trip the check.
+
 ## Directory structure
 
 ```
