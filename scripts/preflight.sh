@@ -110,11 +110,9 @@ if [[ -z "${HS_LANDER_ACCOUNT:-}" || -z "${HS_LANDER_PROJECT:-}" ]]; then
 fi
 
 echo "PREFLIGHT_PROJECT_POINTER=ok"
-project_pointer_ok=1
 
 # --- ACCOUNT_PROFILE ---
 account_config="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
-account_profile_ok=0
 if [[ ! -f "$account_config" ]]; then
   echo "PREFLIGHT_ACCOUNT_PROFILE=missing $account_config does not exist"
   required_failed=1
@@ -126,7 +124,6 @@ else
   done
   if [[ ${#account_missing[@]} -eq 0 ]]; then
     echo "PREFLIGHT_ACCOUNT_PROFILE=ok"
-    account_profile_ok=1
   else
     missing_csv=$(IFS=,; echo "${account_missing[*]}")
     echo "PREFLIGHT_ACCOUNT_PROFILE=incomplete $missing_csv"
@@ -136,7 +133,6 @@ fi
 
 # --- PROJECT_PROFILE ---
 project_config="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
-project_profile_ok=0
 if [[ ! -f "$project_config" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=missing $project_config does not exist"
   required_failed=1
@@ -148,7 +144,6 @@ else
   done
   if [[ ${#project_missing[@]} -eq 0 ]]; then
     echo "PREFLIGHT_PROJECT_PROFILE=ok"
-    project_profile_ok=1
   else
     missing_csv=$(IFS=,; echo "${project_missing[*]}")
     echo "PREFLIGHT_PROJECT_PROFILE=incomplete $missing_csv"
