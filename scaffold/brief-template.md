@@ -59,10 +59,8 @@ include_share: true
 channels: whatsapp, linkedin
 share_text:
 
-## HubSpot Config
-portal_id:
-region:
-domain:
-keychain_prefix:
-dm_upload_path:
-ga4_id:
+## Project Config
+account:              # HS_LANDER_ACCOUNT — directory under ~/.config/hs-lander/ that holds the HubSpot portal ID, region, and HUBSPOT_TOKEN_KEYCHAIN_SERVICE
+domain:               # Page domain (e.g. landing.example.com)
+dm_upload_path:       # Design Manager path (e.g. /my-project)
+ga4_id:               # GA4 Measurement ID (e.g. G-XXXXXXXXXX)

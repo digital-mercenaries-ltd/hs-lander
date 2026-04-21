@@ -23,7 +23,7 @@ cat > "$TMPDIR/project.config.sh" <<'EOF'
 HUBSPOT_PORTAL_ID="12345678"
 HUBSPOT_REGION="eu1"
 DOMAIN="test.example.com"
-KEYCHAIN_PREFIX="test"
+HUBSPOT_TOKEN_KEYCHAIN_SERVICE="test-hubspot-access-token"
 DM_UPLOAD_PATH="/test-project"
 GA4_MEASUREMENT_ID="G-TEST12345"
 CAPTURE_FORM_ID=""

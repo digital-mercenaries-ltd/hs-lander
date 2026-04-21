@@ -17,10 +17,11 @@ echo "Project: $PROJECT_DIR"
 source "$PROJECT_DIR/project.config.sh"
 
 # Read token from Keychain
+: "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
 HUBSPOT_TOKEN=$(security find-generic-password \
-  -s "${KEYCHAIN_PREFIX}-hubspot-access-token" \
+  -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
   -a "$USER" -w 2>/dev/null) || {
-  echo "ERROR: Could not read Keychain token. Is this running on macOS with credentials?" >&2
+  echo "ERROR: Could not read Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE'. Is this running on macOS with credentials?" >&2
   exit 1
 }
 

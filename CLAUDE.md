@@ -13,11 +13,11 @@ hs-lander — a reusable HubSpot landing page framework. Terraform modules, buil
 v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, three local test suites (39 assertions, all passing), and CI workflows are in place.
 
 **Shipped:**
-- PR #1 merged to `main` (2026-04-14)
-- `v1.0.0` tag pushed on merge commit `115de6d`
+- PR #1 merged to `main` (2026-04-14) — v1.0.0 framework
+- PR #2 merged (2026-04-21) — post-v1.0.0 doc cleanup, roadmap, org/project-agnosticism enforcement
+- Account/project config hierarchy refactor — two-tier `~/.config/hs-lander/<account>/` config, `preflight.sh` validator, PAK path removed
 
 **Next:**
-- Account/project config hierarchy refactor — plan at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` (replaces `KEYCHAIN_PREFIX` with two-tier `~/.config/hs-lander/<account>/`)
 - Session 3: add `hs-lander` skill in `~/DocsLocal/skills/` per the orchestration plan
 - End-to-end deployment testing is done manually per-project at this stage; an automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
 
@@ -75,9 +75,9 @@ hs-lander/
 │   ├── upload.sh            ← PUT files to CMS Source Code API (no CLI needed)
 │   ├── watch.sh             ← build + poll for changes
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
+│   ├── preflight.sh         ← validate config/credential/API before build/deploy
 │   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
-│   ├── hs-curl.sh           ← Keychain → curl HubSpot API
-│   └── hs.sh                ← Optional CLI wrapper (not core workflow)
+│   └── hs-curl.sh           ← Keychain → curl HubSpot API
 ├── scaffold/                ← Template for new projects
 │   ├── project.config.example.sh
 │   ├── brief-template.md
@@ -89,6 +89,7 @@ hs-lander/
 │   ├── test-build.sh        ← Local, no network
 │   ├── test-post-apply.sh   ← Local, no network
 │   ├── test-terraform-plan.sh ← Local, parses plan output
+│   ├── test-preflight.sh    ← Local, mocks security/curl/dig
 │   └── test-deployment.sh   ← Network required, live HubSpot
 └── .github/workflows/
     └── ci.yml               ← Lint + build test + plan test (every push)
@@ -100,7 +101,7 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 
 **Terraform modules** create HubSpot resources (forms, pages, email, lists). The `account-setup` module runs once per account; `landing-page` runs per project. Both inherit the `restapi` provider from the consuming project's root `main.tf` — they never take `hubspot_token` as a variable.
 
-**Scripts** are generic and config-driven. They source `project.config.sh` for values and derive Keychain service names from `KEYCHAIN_PREFIX` (v1.0.0 behaviour — the pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` replaces this with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` sourced from a two-tier account/project config). Scripts live in this framework repo and are copied into per-project repos at scaffold time.
+**Scripts** are generic and config-driven. They source `project.config.sh`, which is a thin sourcing-chain pointer into `~/.config/hs-lander/<account>/config.sh` (shared account settings + credential references) and `~/.config/hs-lander/<account>/<project>.sh` (per-landing-page settings). Keychain service names are explicit — `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` in the account config — never derived. Scripts live in this framework repo and are copied into per-project repos at scaffold time.
 
 **Scaffold** is the template for new projects. A project's `terraform/main.tf` references these modules by git URL with a pinned version tag.
 
@@ -144,6 +145,9 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 
 ## Credential rules
 
-All secrets live in macOS Keychain. Pattern (v1.0.0): `${KEYCHAIN_PREFIX}-hubspot-access-token` — this is superseded by the pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md`, which replaces the derivation with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` variable in the account config.
+All secrets live in macOS Keychain. The account config (`~/.config/hs-lander/<account>/config.sh`) declares `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` — the literal Keychain service name — and scripts read the token via `security find-generic-password -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" -a "$USER" -w`. The actual token is never derived from a prefix; it's referenced by explicit name.
+
+Additional credentials follow the same `<PURPOSE>_KEYCHAIN_SERVICE` naming convention (`GOOGLE_SA_KEY_KEYCHAIN_SERVICE`, `CLOUDFLARE_TOKEN_KEYCHAIN_SERVICE`, etc.) and are added to the account config as future roadmap items land.
+
 **Never** write tokens to disk, env files, shell history, or terraform.tfvars.
-**Never** run `hs init`.
+**Never** run `hs init` — the HubSpot CLI path was dropped; everything uses Service Keys via REST.

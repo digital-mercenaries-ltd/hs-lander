@@ -133,9 +133,7 @@ When v1.1-v1.3 are complete, the skill workflow from ICB to live landing page be
 
 ## v2.0: CI/CD with GitHub Secrets
 
-**Depends on:** the account-config-hierarchy refactor (`docs/superpowers/plans/2026-04-20-account-config-hierarchy.md`). The two-tier mapping below assumes account profiles exist at `~/.config/hs-lander/<account>/`; that layout does not yet exist on v1.0.0.
-
-**Current state (post-hierarchy-refactor):** All config and credentials are local — account profiles at `~/.config/hs-lander/`, secrets in macOS Keychain. Deployment runs locally via `npm run deploy`.
+**Current state:** All config and credentials are local — account profiles at `~/.config/hs-lander/<account>/`, secrets in macOS Keychain. Deployment runs locally via `npm run deploy`.
 
 **Goal:** Support running the full build-deploy pipeline in GitHub Actions, with credentials stored as GitHub Secrets and config as repository variables.
 
@@ -167,9 +165,7 @@ The local account profile system (`~/.config/hs-lander/<account>/config.sh`) map
 
 ## v2.1: Account Profile Sync
 
-**Depends on:** the account-config-hierarchy refactor (same as v2.0).
-
-**Current state (post-hierarchy-refactor):** Account profiles are local files. Team members must create their own copies manually.
+**Current state:** Account profiles are local files. Team members must create their own copies manually.
 
 **Goal:** `hs-lander accounts sync` pulls account profiles from a shared source (team repo or GitHub org config).
 
@@ -209,7 +205,7 @@ An earlier draft of this test lived at `.github/workflows/smoke.yml`; it was arc
 
 - v2.0 (CI/CD with GitHub Secrets) must be in place — the workflow needs non-interactive credentials for HubSpot, Cloudflare, and Google Cloud.
 - The skill (Session 3+) must expose a non-interactive mode that takes a brief and config and runs to completion without prompts.
-- The account-config-hierarchy refactor must be complete so the test runner writes the new two-tier config format, not the legacy flat layout.
+- The test runner writes a valid two-tier config (account + project) in the runner's `~/.config/hs-lander/` — the layout shipped in the account-config-hierarchy refactor.
 
 **Why this is worth doing:**
 

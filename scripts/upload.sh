@@ -16,11 +16,12 @@ if [[ ! -d "$DIST_DIR" ]]; then
   exit 1
 fi
 
-# Read token from Keychain
+# Read token from Keychain using the service name from the account config.
+: "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
 HUBSPOT_TOKEN=$(security find-generic-password \
-  -s "${KEYCHAIN_PREFIX}-hubspot-access-token" \
+  -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
   -a "$USER" -w 2>/dev/null) || {
-  echo "ERROR: Could not read ${KEYCHAIN_PREFIX}-hubspot-access-token from Keychain." >&2
+  echo "ERROR: Could not read Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE'." >&2
   exit 1
 }
 
