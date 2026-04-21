@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# test-post-apply.sh — Validates post-apply.sh writes terraform outputs to config.
+# test-post-apply.sh — Validates post-apply.sh writes terraform outputs to the
+# project-level config file under ~/.config/hs-lander/<account>/<project>.sh,
+# NOT to the project-directory sourcing-chain pointer.
 # Local only, no network. Uses a mock terraform binary.
 set -euo pipefail
 
@@ -13,23 +15,50 @@ echo "=== test-post-apply.sh ==="
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# Create fake project structure
-mkdir -p "$TMPDIR/scripts" "$TMPDIR/terraform"
+# Simulate the real layout:
+#   $TMPDIR/project/          — project working dir (copied scripts, sourcing pointer)
+#   $TMPDIR/home/.config/hs-lander/<account>/config.sh   — account-level settings
+#   $TMPDIR/home/.config/hs-lander/<account>/<project>.sh — project-level settings (write target)
+mkdir -p \
+  "$TMPDIR/project/scripts" \
+  "$TMPDIR/project/terraform" \
+  "$TMPDIR/home/.config/hs-lander/testacct"
 
-cp "$REPO_DIR/scripts/post-apply.sh" "$TMPDIR/scripts/post-apply.sh"
+cp "$REPO_DIR/scripts/post-apply.sh" "$TMPDIR/project/scripts/post-apply.sh"
 
-# Write a config file with empty IDs (pre-apply state)
-cat > "$TMPDIR/project.config.sh" <<'EOF'
+# Account config (unchanged by post-apply)
+cat > "$TMPDIR/home/.config/hs-lander/testacct/config.sh" <<'EOF'
 HUBSPOT_PORTAL_ID="12345678"
 HUBSPOT_REGION="eu1"
-DOMAIN="test.example.com"
+DOMAIN_PATTERN="*.example.com"
 HUBSPOT_TOKEN_KEYCHAIN_SERVICE="test-hubspot-access-token"
-DM_UPLOAD_PATH="/test-project"
+EOF
+
+# Project config with empty IDs (pre-apply state) — 7 lines
+cat > "$TMPDIR/home/.config/hs-lander/testacct/testproj.sh" <<'EOF'
+PROJECT_SLUG="testproj"
+DOMAIN="testproj.example.com"
+DM_UPLOAD_PATH="/testproj"
 GA4_MEASUREMENT_ID="G-TEST12345"
 CAPTURE_FORM_ID=""
 SURVEY_FORM_ID=""
 LIST_ID=""
 EOF
+
+# Sourcing-chain pointer (what `project.config.sh` looks like in a real project)
+cat > "$TMPDIR/project/project.config.sh" <<'EOF'
+HS_LANDER_ACCOUNT="testacct"
+HS_LANDER_PROJECT="testproj"
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+EOF
+
+# Record baseline content of files that must NOT change
+ACCOUNT_FILE="$TMPDIR/home/.config/hs-lander/testacct/config.sh"
+POINTER_FILE="$TMPDIR/project/project.config.sh"
+PROJECT_FILE="$TMPDIR/home/.config/hs-lander/testacct/testproj.sh"
+account_before=$(cat "$ACCOUNT_FILE")
+pointer_before=$(cat "$POINTER_FILE")
 
 # Create mock terraform that returns known outputs
 mkdir -p "$TMPDIR/mock-bin"
@@ -45,33 +74,40 @@ esac
 MOCK
 chmod +x "$TMPDIR/mock-bin/terraform"
 
-# --- Run post-apply with mock terraform ---
+# --- Run post-apply with mock terraform + overridden HOME ---
 echo "Running post-apply.sh..."
-PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/scripts/post-apply.sh"
+HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/project/scripts/post-apply.sh"
 
 # --- Assertions ---
 
 echo ""
-echo "--- Config values updated ---"
-assert_file_contains "$TMPDIR/project.config.sh" 'CAPTURE_FORM_ID="mock-form-id-abc123"' "CAPTURE_FORM_ID updated"
-assert_file_contains "$TMPDIR/project.config.sh" 'SURVEY_FORM_ID=""' "SURVEY_FORM_ID stays empty"
-assert_file_contains "$TMPDIR/project.config.sh" 'LIST_ID="mock-list-id-789"' "LIST_ID updated"
+echo "--- Form IDs written to project config ---"
+assert_file_contains "$PROJECT_FILE" 'CAPTURE_FORM_ID="mock-form-id-abc123"' "CAPTURE_FORM_ID written to project config"
+assert_file_contains "$PROJECT_FILE" 'SURVEY_FORM_ID=""' "SURVEY_FORM_ID stays empty"
+assert_file_contains "$PROJECT_FILE" 'LIST_ID="mock-list-id-789"' "LIST_ID written to project config"
 
 echo ""
-echo "--- Other config values unchanged ---"
-assert_file_contains "$TMPDIR/project.config.sh" 'HUBSPOT_PORTAL_ID="12345678"' "portal ID unchanged"
-assert_file_contains "$TMPDIR/project.config.sh" 'HUBSPOT_REGION="eu1"' "region unchanged"
-assert_file_contains "$TMPDIR/project.config.sh" 'DOMAIN="test.example.com"' "domain unchanged"
-assert_file_contains "$TMPDIR/project.config.sh" 'GA4_MEASUREMENT_ID="G-TEST12345"' "GA4 ID unchanged"
+echo "--- Other project values unchanged ---"
+assert_file_contains "$PROJECT_FILE" 'PROJECT_SLUG="testproj"' "PROJECT_SLUG unchanged"
+assert_file_contains "$PROJECT_FILE" 'DOMAIN="testproj.example.com"' "DOMAIN unchanged"
+assert_file_contains "$PROJECT_FILE" 'DM_UPLOAD_PATH="/testproj"' "DM_UPLOAD_PATH unchanged"
+assert_file_contains "$PROJECT_FILE" 'GA4_MEASUREMENT_ID="G-TEST12345"' "GA4 ID unchanged"
+
+echo ""
+echo "--- Account config and sourcing pointer untouched ---"
+account_after=$(cat "$ACCOUNT_FILE")
+pointer_after=$(cat "$POINTER_FILE")
+assert_equal "$account_after" "$account_before" "account config unchanged"
+assert_equal "$pointer_after" "$pointer_before" "sourcing-chain pointer unchanged"
 
 echo ""
 echo "--- Idempotent (running twice gives same result) ---"
-PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/scripts/post-apply.sh"
-assert_file_contains "$TMPDIR/project.config.sh" 'CAPTURE_FORM_ID="mock-form-id-abc123"' "CAPTURE_FORM_ID same after re-run"
-assert_file_contains "$TMPDIR/project.config.sh" 'LIST_ID="mock-list-id-789"' "LIST_ID same after re-run"
+HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/project/scripts/post-apply.sh"
+assert_file_contains "$PROJECT_FILE" 'CAPTURE_FORM_ID="mock-form-id-abc123"' "CAPTURE_FORM_ID same after re-run"
+assert_file_contains "$PROJECT_FILE" 'LIST_ID="mock-list-id-789"' "LIST_ID same after re-run"
 
-# Count lines to ensure no duplication
-line_count=$(wc -l < "$TMPDIR/project.config.sh" | tr -d ' ')
-assert_equal "$line_count" "9" "config file still has 9 lines (no duplication)"
+# Count lines to ensure no duplication — project file should stay at 7 lines
+line_count=$(wc -l < "$PROJECT_FILE" | tr -d ' ')
+assert_equal "$line_count" "7" "project config still has 7 lines (no duplication)"
 
 test_summary

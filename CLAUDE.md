@@ -15,11 +15,14 @@ v1.0.0 framework built (Session 2 of the orchestration plan complete). All scrip
 **Shipped:**
 - PR #1 merged to `main` (2026-04-14) — v1.0.0 framework
 - PR #2 merged (2026-04-21) — post-v1.0.0 doc cleanup, roadmap, org/project-agnosticism enforcement
-- Account/project config hierarchy refactor — two-tier `~/.config/hs-lander/<account>/` config, `preflight.sh` validator, PAK path removed
+- PR #3 merged (2026-04-21) — account/project config hierarchy, two-tier `~/.config/hs-lander/<account>/` config, `preflight.sh` validator, PAK path removed
+
+**In flight (elsewhere):**
+- Session 3: `hs-lander` skill in `~/DocsLocal/skills/` — drafted, under review iterations. Framework-compatibility feedback from that session has been flowing back to this repo (PR #4 is the current example).
 
 **Next:**
-- Session 3: add `hs-lander` skill in `~/DocsLocal/skills/` per the orchestration plan
 - End-to-end deployment testing is done manually per-project at this stage; an automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
+- Session 4 onwards (per-project deployments) happens in per-project repos, not this one — waits on the skill landing.
 
 **Reference docs:**
 - Design spec: `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/specs/2026-04-10-hs-lander-design.md`
@@ -52,9 +55,10 @@ terraform -chdir=terraform/modules/landing-page validate
 ### Per-project commands (defined in scaffold/package.json)
 
 ```bash
+npm run preflight   # validate config/credential/API/DNS before build/deploy
 npm run build       # src/ → dist/ with token substitution
 npm run setup       # build + terraform apply
-npm run post-apply  # terraform outputs → project.config.sh
+npm run post-apply  # terraform outputs → ~/.config/hs-lander/<account>/<project>.sh
 npm run deploy      # build + upload dist/ to HubSpot
 npm run watch       # build + poll for changes
 npm run tf:init     # terraform init

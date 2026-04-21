@@ -43,11 +43,11 @@ src/
 ### 3. Build and deploy
 
 ```bash
-bash scripts/preflight.sh  # Validate config, credentials, and HubSpot readiness
+npm run preflight          # Validate config, credentials, and HubSpot readiness
 npm run build              # src/ → dist/ with token substitution
 npm run tf:init            # Initialise Terraform
 npm run setup              # Build + terraform apply
-npm run post-apply         # Write form IDs to config
+npm run post-apply         # Write form IDs to ~/.config/hs-lander/<account>/<project>.sh
 npm run build              # Rebuild with form IDs
 npm run deploy             # Upload to HubSpot Design Manager
 ```
