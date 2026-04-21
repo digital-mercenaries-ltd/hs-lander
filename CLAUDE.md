@@ -53,9 +53,10 @@ terraform -chdir=terraform/modules/landing-page validate
 ### Per-project commands (defined in scaffold/package.json)
 
 ```bash
+npm run preflight   # validate config/credential/API/DNS before build/deploy
 npm run build       # src/ → dist/ with token substitution
 npm run setup       # build + terraform apply
-npm run post-apply  # terraform outputs → project.config.sh
+npm run post-apply  # terraform outputs → ~/.config/hs-lander/<account>/<project>.sh
 npm run deploy      # build + upload dist/ to HubSpot
 npm run watch       # build + poll for changes
 npm run tf:init     # terraform init
