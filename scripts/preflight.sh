@@ -75,7 +75,6 @@ _source_vars() {
 }
 
 # --- PROJECT_POINTER ---
-project_pointer_ok=0
 if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
   echo "PREFLIGHT_PROJECT_POINTER=missing project.config.sh not found in $PROJECT_DIR"
   echo "PREFLIGHT_ACCOUNT_PROFILE=skipped (no project pointer)"
