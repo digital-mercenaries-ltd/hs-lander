@@ -17,7 +17,11 @@ mkdir my-project && cd my-project
 cp -r /path/to/hs-lander/scaffold/* .
 cp -r /path/to/hs-lander/scripts/ scripts/
 cp project.config.example.sh project.config.sh
-# Edit project.config.sh with your values
+# Set HS_LANDER_ACCOUNT and HS_LANDER_PROJECT in project.config.sh
+# Create the account config if it doesn't exist yet:
+#   ~/.config/hs-lander/<account>/config.sh    — portal ID, region, HUBSPOT_TOKEN_KEYCHAIN_SERVICE
+# Create the project config:
+#   ~/.config/hs-lander/<account>/<project>.sh — slug, domain, DM upload path, GA4 ID
 ```
 
 ### 2. Add your content
@@ -39,12 +43,13 @@ src/
 ### 3. Build and deploy
 
 ```bash
-npm run build        # src/ → dist/ with token substitution
-npm run tf:init      # Initialise Terraform
-npm run setup        # Build + terraform apply
-npm run post-apply   # Write form IDs to config
-npm run build        # Rebuild with form IDs
-npm run deploy       # Upload to HubSpot Design Manager
+bash scripts/preflight.sh  # Validate config, credentials, and HubSpot readiness
+npm run build              # src/ → dist/ with token substitution
+npm run tf:init            # Initialise Terraform
+npm run setup              # Build + terraform apply
+npm run post-apply         # Write form IDs to config
+npm run build              # Rebuild with form IDs
+npm run deploy             # Upload to HubSpot Design Manager
 ```
 
 ## Token Substitution
@@ -76,14 +81,26 @@ Both modules use the Mastercard/restapi provider (~1.19) and inherit the provide
 
 ## Authentication
 
-All credentials are stored in macOS Keychain. Scripts read them via `security find-generic-password`.
+All credentials live in macOS Keychain. The account config declares the Keychain service name; scripts use that literal name (never a derived prefix) when reading the token.
 
-| Keychain service | Content |
-|---|---|
-| `${KEYCHAIN_PREFIX}-hubspot-access-token` | HubSpot Service Key |
-| `${KEYCHAIN_PREFIX}-hubspot-pak` | Optional — PAK for HubSpot CLI |
+**Account config** (`~/.config/hs-lander/<account>/config.sh`):
 
-> **Being revised:** this section describes the v1.0.0 flat-config pattern. The pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` replaces `KEYCHAIN_PREFIX` derivation with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` sourced from a two-tier account/project config, and drops the optional PAK entry (not part of the core workflow).
+```bash
+HUBSPOT_PORTAL_ID=""               # e.g. 12345678
+HUBSPOT_REGION=""                  # eu1 or na1
+DOMAIN_PATTERN=""                  # e.g. *.example.com
+HUBSPOT_TOKEN_KEYCHAIN_SERVICE=""  # e.g. <account>-hubspot-access-token
+```
+
+Scripts read the token via:
+
+```bash
+security find-generic-password -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" -a "$USER" -w
+```
+
+The token is never written to disk, env files, terraform.tfvars, or stdout. `scripts/preflight.sh` validates that the Keychain entry exists and that the HubSpot API responds before any build or deploy step runs.
+
+Future service references (GA4 service account, Cloudflare API token, etc.) follow the same `<PURPOSE>_KEYCHAIN_SERVICE` naming pattern and are added to the account config as their respective roadmap items land.
 
 ## Prerequisites
 

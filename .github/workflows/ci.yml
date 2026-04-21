@@ -60,3 +60,11 @@ jobs:
 
       - name: Run test-post-apply.sh
         run: bash tests/test-post-apply.sh
+
+  preflight-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run test-preflight.sh
+        run: bash tests/test-preflight.sh

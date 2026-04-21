@@ -1,19 +1,18 @@
 # scaffold/project.config.example.sh
 #
-# Project configuration. Copy to project.config.sh and fill in values.
-# project.config.sh is gitignored — never commit real values.
+# project.config.sh sources account + project config from ~/.config/hs-lander/.
+# Copy this file to project.config.sh (gitignored) and set the two names below.
+#
+# Account configs live at: ~/.config/hs-lander/<account>/config.sh
+# Project configs live at: ~/.config/hs-lander/<account>/<project>.sh
+#
+# See the framework docs for setup:
+# https://github.com/digital-mercenaries-ltd/hs-lander/blob/main/docs/framework.md
 
-# HubSpot account
-HUBSPOT_PORTAL_ID=""           # Portal ID (e.g. 12345678)
-HUBSPOT_REGION=""              # eu1 or na1
-KEYCHAIN_PREFIX=""             # Keychain service prefix (e.g. your-account-name)
+HS_LANDER_ACCOUNT=""     # directory name under ~/.config/hs-lander/
+HS_LANDER_PROJECT=""     # project config filename (without .sh)
 
-# Project
-DOMAIN=""                      # Page domain (e.g. landing.example.com)
-DM_UPLOAD_PATH=""              # Design Manager path (e.g. /my-project)
-GA4_MEASUREMENT_ID=""          # Google Analytics 4 ID (e.g. G-XXXXXXXXXX)
-
-# Populated by post-apply.sh after terraform apply
-CAPTURE_FORM_ID=""
-SURVEY_FORM_ID=""
-LIST_ID=""
+# shellcheck source=/dev/null
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
+# shellcheck source=/dev/null
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"

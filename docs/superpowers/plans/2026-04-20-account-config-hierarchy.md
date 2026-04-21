@@ -1,7 +1,8 @@
 # Plan: Account/Project Config Hierarchy
 
 **Date:** 2026-04-20
-**Status:** Pending
+**Status:** Complete (2026-04-21) — landed on branch `refactor/account-config-hierarchy`
+**Verification:** all four local test suites pass (test-build 19/19, test-post-apply 10/10, test-terraform-plan 10/10, test-preflight 13/13 — 52 assertions total); verification greps return zero hits for both `KEYCHAIN_PREFIX` (in `scripts/ scaffold/ tests/ terraform/`) and org/project-specific names (in the wider doc scope).
 **Context:** The framework currently uses `KEYCHAIN_PREFIX` in `project.config.sh` to derive Keychain service names at runtime. This bakes in a naming convention and conflates "key" (config identifier) with "key" (API secret). The framework should support a two-tier config hierarchy — account-level and project-level — with explicit Keychain service name references and no org-specific assumptions.
 
 ## Goal
