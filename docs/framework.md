@@ -102,6 +102,8 @@ The token is never written to disk, env files, terraform.tfvars, or stdout. `scr
 
 Future service references (GA4 service account, Cloudflare API token, etc.) follow the same `<PURPOSE>_KEYCHAIN_SERVICE` naming pattern and are added to the account config as their respective roadmap items land.
 
+> **Removed in the config-hierarchy refactor:** the optional `scripts/hs.sh` PAK wrapper for the HubSpot CLI. Everything the framework needs runs via Service Key + REST (`scripts/upload.sh`, `scripts/tf.sh`, `scripts/hs-curl.sh`). Adopters who previously relied on `hs.sh` for manual CLI use can either use `hs-curl.sh` for API calls or install the HubSpot CLI themselves outside this framework.
+
 ## Prerequisites
 
 - HubSpot Marketing Hub Starter + Content Hub Starter

@@ -14,7 +14,12 @@ assert_file_exists "$REPO_DIR/scripts/preflight.sh" "scripts/preflight.sh exists
 
 # --- Shared setup helpers ---
 
-MOCK_TOKEN="SECRET_TOKEN_XYZ_MUST_NOT_LEAK"
+# Distinctive high-entropy token so partial-leak patterns (truncation,
+# encoding) are more likely to trip the grep-based assertion. Built from
+# $RANDOM rather than /dev/urandom to avoid SIGPIPE against `pipefail`.
+MOCK_TOKEN="hslt_$(printf '%04x%04x%04x%04x%04x%04x%04x%04x%04x%04x' \
+  $RANDOM $RANDOM $RANDOM $RANDOM $RANDOM \
+  $RANDOM $RANDOM $RANDOM $RANDOM $RANDOM)"
 
 # Create a self-contained test environment: fake HOME with account+project config,
 # a project dir containing preflight.sh, and a mock bin dir.
@@ -98,11 +103,27 @@ exit 1
 MOCK
   chmod +x "$dir/mock-bin/security"
 
-  # Mock `curl`: return 200 for any URL. Good enough for happy-path API checks.
+  # Mock `curl`: parse the URL out of the arg list and return a code per
+  # endpoint. Callers control each endpoint's code via env vars:
+  #   MOCK_CURL_ACCOUNT_INFO_CODE   (default 200) — /account-info/v3/details
+  #   MOCK_CURL_PROJECT_SOURCE_CODE (default 200) — /crm/v3/properties/contacts/project_source
   cat > "$dir/mock-bin/curl" <<'MOCK'
 #!/usr/bin/env bash
-# Minimal mock — the real preflight uses -o /dev/null -w %{http_code}.
-echo "200"
+url=""
+for arg in "$@"; do
+  case "$arg" in https://*) url="$arg" ;; esac
+done
+case "$url" in
+  *"/account-info/v3/details"*)
+    echo "${MOCK_CURL_ACCOUNT_INFO_CODE:-200}"
+    ;;
+  *"/crm/v3/properties/contacts/project_source"*)
+    echo "${MOCK_CURL_PROJECT_SOURCE_CODE:-200}"
+    ;;
+  *)
+    echo "200"
+    ;;
+esac
 exit 0
 MOCK
   chmod +x "$dir/mock-bin/curl"
@@ -118,8 +139,12 @@ MOCK
 
 run_preflight_capture() {
   # $1: env dir, $2: output log path. Returns preflight's exit code via echo-trick.
+  # Caller can set MOCK_CURL_ACCOUNT_INFO_CODE / MOCK_CURL_PROJECT_SOURCE_CODE
+  # before calling to control the mock curl's per-endpoint response.
   local dir="$1" log="$2"
   HOME="$dir/home" PATH="$dir/mock-bin:$PATH" \
+    MOCK_CURL_ACCOUNT_INFO_CODE="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" \
+    MOCK_CURL_PROJECT_SOURCE_CODE="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" \
     bash "$dir/project/scripts/preflight.sh" >"$log" 2>&1
   echo "$?"
 }
@@ -197,5 +222,47 @@ write_mock_bin "$TMP5"
 LOG5="$TMP5/preflight.log"
 run_preflight_capture "$TMP5" "$LOG5" >/dev/null || true
 assert_file_not_contains "$LOG5" "$MOCK_TOKEN" "mock token does not appear in preflight output"
+
+# Also check that bash -x xtrace output doesn't leak the token — preflight
+# should wrap the curl calls in a set +x guard.
+LOG5X="$TMP5/preflight-xtrace.log"
+HOME="$TMP5/home" PATH="$TMP5/mock-bin:$PATH" \
+  MOCK_CURL_ACCOUNT_INFO_CODE=200 MOCK_CURL_PROJECT_SOURCE_CODE=200 \
+  bash -x "$TMP5/project/scripts/preflight.sh" >"$LOG5X" 2>&1 || true
+assert_file_not_contains "$LOG5X" "$MOCK_TOKEN" "mock token does not leak in bash -x xtrace output"
+
+# --- Scenario 6: project_source 404 (first project on account) → non-blocking ---
+# The plan treats this as an expected, recoverable state: the skill should
+# detect it and run the account-setup module, then re-preflight. Therefore
+# preflight must report it but NOT set exit 1.
+
+echo ""
+echo "--- Scenario 6: project_source 404 (first project on account) ---"
+TMP6=$(setup_env)
+write_account_config "$TMP6"
+write_project_config "$TMP6"
+write_project_sourcing_chain "$TMP6"
+write_mock_bin "$TMP6"
+LOG6="$TMP6/preflight.log"
+exit6=$(MOCK_CURL_PROJECT_SOURCE_CODE=404 run_preflight_capture "$TMP6" "$LOG6" || true)
+assert_equal "$exit6" "0" "exit code 0 when project_source is 404 (recoverable — skill re-runs account-setup)"
+assert_file_contains "$LOG6" "PREFLIGHT_PROJECT_SOURCE=missing" "project_source reported missing on 404"
+assert_file_contains "$LOG6" "PREFLIGHT_API_ACCESS=ok" "API access still ok alongside the recoverable 404"
+
+# --- Scenario 7: account-info 401 (bad token) → blocking error ---
+
+echo ""
+echo "--- Scenario 7: account-info 401 (bad token) ---"
+TMP7=$(setup_env)
+write_account_config "$TMP7"
+write_project_config "$TMP7"
+write_project_sourcing_chain "$TMP7"
+write_mock_bin "$TMP7"
+LOG7="$TMP7/preflight.log"
+# Extend trap to cover TMP6, TMP7 and the xtrace log dir (already covered by TMP5)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}"' EXIT
+exit7=$(MOCK_CURL_ACCOUNT_INFO_CODE=401 run_preflight_capture "$TMP7" "$LOG7" || true)
+assert_equal "$exit7" "1" "exit code 1 when HubSpot API returns 401"
+assert_file_contains "$LOG7" "PREFLIGHT_API_ACCESS=error" "API access reported error on 401"
 
 test_summary
