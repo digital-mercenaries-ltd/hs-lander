@@ -104,6 +104,25 @@ Future service references (GA4 service account, Cloudflare API token, etc.) foll
 
 > **Removed in the config-hierarchy refactor:** the optional `scripts/hs.sh` PAK wrapper for the HubSpot CLI. Everything the framework needs runs via Service Key + REST (`scripts/upload.sh`, `scripts/tf.sh`, `scripts/hs-curl.sh`). Adopters who previously relied on `hs.sh` for manual CLI use can either use `hs-curl.sh` for API calls or install the HubSpot CLI themselves outside this framework.
 
+## Preflight output reference
+
+`npm run preflight` (or `bash scripts/preflight.sh`) emits one line per check in the form `PREFLIGHT_<NAME>=<state> [detail]`. Exit 0 when every required check is ok or warn; exit 1 when any required check is missing, empty, unauthorized, forbidden, unreachable, or error. Warnings and the `PROJECT_SOURCE=missing` "first project on account" signal are non-blocking.
+
+| Check | States | Detail shape |
+|---|---|---|
+| `PREFLIGHT_PROJECT_POINTER` | `ok` \| `missing` \| `incomplete` | Missing vars listed when `incomplete` (e.g. `HS_LANDER_ACCOUNT HS_LANDER_PROJECT`) |
+| `PREFLIGHT_ACCOUNT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | When `missing`: absolute path. When `incomplete`: comma-list of missing fields |
+| `PREFLIGHT_PROJECT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | Same shape as `ACCOUNT_PROFILE` |
+| `PREFLIGHT_CREDENTIAL` | `found` \| `missing` \| `empty` \| `skipped` | `missing` includes the Keychain service name and the `security add-generic-password` command to add it |
+| `PREFLIGHT_API_ACCESS` | `ok` \| `unauthorized` \| `forbidden` \| `unreachable` \| `error` \| `skipped` | `unauthorized` = 401 (token invalid/expired); `forbidden` = 403; `unreachable` = curl failed to reach `api.hubapi.com`; `error` = unexpected HTTP |
+| `PREFLIGHT_SCOPES` | `ok` \| `missing` \| `error` \| `skipped` | `missing` is followed by a comma-list of missing scopes — the skill can name them directly |
+| `PREFLIGHT_PROJECT_SOURCE` | `ok` \| `missing` \| `error` \| `skipped` | `missing` on 404 is **recoverable, non-blocking** — signals "first project on this account" |
+| `PREFLIGHT_DNS` | `ok` \| `missing` \| `skipped` | On `missing`, detail includes the expected CNAME target (`<portal-id>.group0.sites.hscoscdn-<region>.net`) so the user knows which record to create |
+| `PREFLIGHT_GA4` | `ok` \| `warn` | `warn` when `GA4_MEASUREMENT_ID` is empty (analytics won't fire, but build/deploy still works) |
+| `PREFLIGHT_FORM_IDS` | `ok` \| `warn` | `warn` when `CAPTURE_FORM_ID` is empty (expected before first deploy; populated by `post-apply`) |
+
+Credential safety: the HubSpot token is read into a local shell variable, used for the three API probes (account-info, project_source, scopes introspection), and unset via EXIT trap. xtrace is disabled around the token-handling block so `bash -x scripts/preflight.sh` does not leak the token either.
+
 ## Prerequisites
 
 - HubSpot Marketing Hub Starter + Content Hub Starter

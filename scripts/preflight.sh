@@ -27,30 +27,133 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 required_failed=0
 token=""
-trap 'unset token' EXIT
+scopes_body_file=""
+trap 'unset token; [[ -n "$scopes_body_file" ]] && rm -f "$scopes_body_file"' EXIT
 
 # --- Config discovery ---
+# Three discrete checks: PROJECT_POINTER → ACCOUNT_PROFILE → PROJECT_PROFILE.
+# Each validates file existence and required fields before the next check
+# depends on them. If POINTER is missing, skip all downstream (no way to find
+# the hierarchy files without it).
 
+# Helper: source a file in a subshell (with source builtin shadowed so cascading
+# sources don't fire) and print requested var assignments. Caller eval's the
+# output into the current shell.
+_extract_pointer_vars() {
+  # Extract the HS_LANDER_ACCOUNT and HS_LANDER_PROJECT assignments from the
+  # pointer file WITHOUT sourcing it (sourcing would fire the file's own
+  # cascading source calls, which may reference account/project config files
+  # that don't exist yet).
+  #
+  # Assumption: the scaffold template writes these as
+  #   HS_LANDER_ACCOUNT="<value>"
+  #   HS_LANDER_PROJECT="<value>"
+  # i.e. on their own lines, double-quoted, no fancy expansions. Anything
+  # that deviates from that pattern is effectively malformed for preflight's
+  # purposes and will surface as an "incomplete" POINTER result.
+  local path="$1"
+  local account project
+  account=$(sed -n -E 's/^[[:space:]]*HS_LANDER_ACCOUNT=[[:space:]]*"([^"]*)".*/\1/p' "$path" | head -1)
+  project=$(sed -n -E 's/^[[:space:]]*HS_LANDER_PROJECT=[[:space:]]*"([^"]*)".*/\1/p' "$path" | head -1)
+  printf 'HS_LANDER_ACCOUNT=%q\n' "$account"
+  printf 'HS_LANDER_PROJECT=%q\n' "$project"
+}
+
+# Helper: source a file normally in a subshell (cascades allowed) and print
+# requested vars. Used for account / project config files where we want the
+# file's own semantics but not the side effect on the parent shell.
+_source_vars() {
+  local path="$1"; shift
+  (
+    set +eu
+    # shellcheck source=/dev/null
+    source "$path" 2>/dev/null || true
+    for v in "$@"; do
+      printf '%s=%q\n' "$v" "${!v:-}"
+    done
+  )
+}
+
+# --- PROJECT_POINTER ---
+project_pointer_ok=0
 if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
-  echo "PREFLIGHT_CONFIG=missing project.config.sh not found in $PROJECT_DIR"
+  echo "PREFLIGHT_PROJECT_POINTER=missing project.config.sh not found in $PROJECT_DIR"
+  echo "PREFLIGHT_ACCOUNT_PROFILE=skipped (no project pointer)"
+  echo "PREFLIGHT_PROJECT_PROFILE=skipped (no project pointer)"
+  echo "PREFLIGHT_CREDENTIAL=skipped (no project pointer)"
+  echo "PREFLIGHT_API_ACCESS=skipped (no project pointer)"
+  echo "PREFLIGHT_PROJECT_SOURCE=skipped (no project pointer)"
+  echo "PREFLIGHT_DNS=skipped (no project pointer)"
+  echo "PREFLIGHT_GA4=skipped (no project pointer)"
+  echo "PREFLIGHT_FORM_IDS=skipped (no project pointer)"
   exit 1
 fi
 
-# shellcheck source=/dev/null
-source "$PROJECT_DIR/project.config.sh"
+# Extract HS_LANDER_ACCOUNT and HS_LANDER_PROJECT from the pointer without
+# firing the cascading source lines (those reference files that may not exist).
+eval "$(_extract_pointer_vars "$PROJECT_DIR/project.config.sh")"
 
-missing_vars=()
-for var in HUBSPOT_PORTAL_ID HUBSPOT_REGION DOMAIN PROJECT_SLUG DM_UPLOAD_PATH HUBSPOT_TOKEN_KEYCHAIN_SERVICE; do
-  if [[ -z "${!var:-}" ]]; then
-    missing_vars+=("$var")
-  fi
-done
+if [[ -z "${HS_LANDER_ACCOUNT:-}" || -z "${HS_LANDER_PROJECT:-}" ]]; then
+  pointer_missing=()
+  [[ -z "${HS_LANDER_ACCOUNT:-}" ]] && pointer_missing+=("HS_LANDER_ACCOUNT")
+  [[ -z "${HS_LANDER_PROJECT:-}" ]] && pointer_missing+=("HS_LANDER_PROJECT")
+  echo "PREFLIGHT_PROJECT_POINTER=incomplete ${pointer_missing[*]}"
+  echo "PREFLIGHT_ACCOUNT_PROFILE=skipped (pointer incomplete)"
+  echo "PREFLIGHT_PROJECT_PROFILE=skipped (pointer incomplete)"
+  echo "PREFLIGHT_CREDENTIAL=skipped (pointer incomplete)"
+  echo "PREFLIGHT_API_ACCESS=skipped (pointer incomplete)"
+  echo "PREFLIGHT_PROJECT_SOURCE=skipped (pointer incomplete)"
+  echo "PREFLIGHT_DNS=skipped (pointer incomplete)"
+  echo "PREFLIGHT_GA4=skipped (pointer incomplete)"
+  echo "PREFLIGHT_FORM_IDS=skipped (pointer incomplete)"
+  exit 1
+fi
 
-if [[ ${#missing_vars[@]} -eq 0 ]]; then
-  echo "PREFLIGHT_CONFIG=ok"
-else
-  echo "PREFLIGHT_CONFIG=missing ${missing_vars[*]}"
+echo "PREFLIGHT_PROJECT_POINTER=ok"
+project_pointer_ok=1
+
+# --- ACCOUNT_PROFILE ---
+account_config="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
+account_profile_ok=0
+if [[ ! -f "$account_config" ]]; then
+  echo "PREFLIGHT_ACCOUNT_PROFILE=missing $account_config does not exist"
   required_failed=1
+else
+  eval "$(_source_vars "$account_config" HUBSPOT_PORTAL_ID HUBSPOT_REGION HUBSPOT_TOKEN_KEYCHAIN_SERVICE)"
+  account_missing=()
+  for v in HUBSPOT_PORTAL_ID HUBSPOT_REGION HUBSPOT_TOKEN_KEYCHAIN_SERVICE; do
+    [[ -z "${!v:-}" ]] && account_missing+=("$v")
+  done
+  if [[ ${#account_missing[@]} -eq 0 ]]; then
+    echo "PREFLIGHT_ACCOUNT_PROFILE=ok"
+    account_profile_ok=1
+  else
+    missing_csv=$(IFS=,; echo "${account_missing[*]}")
+    echo "PREFLIGHT_ACCOUNT_PROFILE=incomplete $missing_csv"
+    required_failed=1
+  fi
+fi
+
+# --- PROJECT_PROFILE ---
+project_config="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+project_profile_ok=0
+if [[ ! -f "$project_config" ]]; then
+  echo "PREFLIGHT_PROJECT_PROFILE=missing $project_config does not exist"
+  required_failed=1
+else
+  eval "$(_source_vars "$project_config" PROJECT_SLUG DOMAIN DM_UPLOAD_PATH GA4_MEASUREMENT_ID CAPTURE_FORM_ID)"
+  project_missing=()
+  for v in PROJECT_SLUG DOMAIN DM_UPLOAD_PATH; do
+    [[ -z "${!v:-}" ]] && project_missing+=("$v")
+  done
+  if [[ ${#project_missing[@]} -eq 0 ]]; then
+    echo "PREFLIGHT_PROJECT_PROFILE=ok"
+    project_profile_ok=1
+  else
+    missing_csv=$(IFS=,; echo "${project_missing[*]}")
+    echo "PREFLIGHT_PROJECT_PROFILE=incomplete $missing_csv"
+    required_failed=1
+  fi
 fi
 
 # --- Credential + API checks ---
@@ -69,57 +172,175 @@ else
   _xtrace_was_on=0
   case "$-" in *x*) _xtrace_was_on=1; set +x ;; esac
 
-  credential_ok=0
+  credential_state="missing"   # missing | empty | found
   api_status="000"
+  api_curl_exit=0
   ps_status="000"
+  ps_curl_exit=0
+  scopes_status="000"
+  scopes_curl_exit=0
+  scopes_body_file=""
   if token=$(security find-generic-password \
                -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
                -a "$USER" -w 2>/dev/null); then
-    credential_ok=1
-    api_status=$(curl -s -o /dev/null -w "%{http_code}" \
-      -H "Authorization: Bearer $token" \
-      "https://api.hubapi.com/account-info/v3/details")
-    ps_status=$(curl -s -o /dev/null -w "%{http_code}" \
-      -H "Authorization: Bearer $token" \
-      "https://api.hubapi.com/crm/v3/properties/contacts/project_source")
+    if [[ -n "$token" ]]; then
+      credential_state="found"
+      # Capture curl's exit code separately (via `|| curl_exit=$?`) so a
+      # non-zero exit doesn't trip set -e — we need to distinguish
+      # "curl couldn't connect" (unreachable) from "HTTP error response".
+      api_status=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: Bearer $token" \
+        "https://api.hubapi.com/account-info/v3/details") || api_curl_exit=$?
+      # Skip subsequent calls if the first failed to reach the server.
+      if [[ $api_curl_exit -eq 0 ]]; then
+        ps_status=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: Bearer $token" \
+          "https://api.hubapi.com/crm/v3/properties/contacts/project_source") || ps_curl_exit=$?
+        # Scope introspection — only run when API access looks healthy.
+        if [[ "$api_status" == "200" ]]; then
+          scopes_body_file=$(mktemp)
+          scopes_status=$(curl -s -o "$scopes_body_file" -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            -d "{\"tokenKey\":\"$token\"}" \
+            "https://api.hubapi.com/oauth/v2/private-apps/get/access-token-info") || scopes_curl_exit=$?
+        fi
+      fi
+    else
+      credential_state="empty"
+    fi
   fi
 
   unset token
   [[ $_xtrace_was_on -eq 1 ]] && set -x
   unset _xtrace_was_on
 
-  if [[ $credential_ok -eq 1 ]]; then
-    echo "PREFLIGHT_CREDENTIAL=ok"
+  case "$credential_state" in
+    found)
+      echo "PREFLIGHT_CREDENTIAL=found"
 
-    if [[ "$api_status" == "200" ]]; then
-      echo "PREFLIGHT_API_ACCESS=ok"
-    else
-      echo "PREFLIGHT_API_ACCESS=error HubSpot API returned HTTP $api_status"
-      required_failed=1
-    fi
-
-    case "$ps_status" in
-      200)
-        echo "PREFLIGHT_PROJECT_SOURCE=ok"
-        ;;
-      404)
-        # Recoverable, non-blocking: this is the first project on the account.
-        # The skill should see this and run the account-setup module, then
-        # re-preflight. Exit code stays 0 so the skill can act on the signal.
-        echo "PREFLIGHT_PROJECT_SOURCE=missing (first project on this account — run account-setup module)"
-        ;;
-      *)
-        echo "PREFLIGHT_PROJECT_SOURCE=error HubSpot API returned HTTP $ps_status"
+      if [[ $api_curl_exit -ne 0 ]]; then
+        echo "PREFLIGHT_API_ACCESS=unreachable curl exited with code $api_curl_exit (network, DNS, or TLS failure reaching api.hubapi.com)"
+        echo "PREFLIGHT_SCOPES=skipped (API unreachable)"
+        echo "PREFLIGHT_PROJECT_SOURCE=skipped (API unreachable)"
         required_failed=1
-        ;;
-    esac
-  else
-    echo "PREFLIGHT_CREDENTIAL=missing Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' not found"
-    echo "  Add it with: security add-generic-password -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'"
-    echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
-    echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"
-    required_failed=1
-  fi
+      else
+        case "$api_status" in
+          200)
+            echo "PREFLIGHT_API_ACCESS=ok"
+            ;;
+          401)
+            echo "PREFLIGHT_API_ACCESS=unauthorized HubSpot returned 401 — token invalid or expired"
+            required_failed=1
+            ;;
+          403)
+            echo "PREFLIGHT_API_ACCESS=forbidden HubSpot returned 403 — token lacks required permissions"
+            required_failed=1
+            ;;
+          *)
+            echo "PREFLIGHT_API_ACCESS=error HubSpot returned HTTP $api_status"
+            required_failed=1
+            ;;
+        esac
+
+        # SCOPES and PROJECT_SOURCE only run if API access itself is healthy.
+        if [[ "$api_status" == "200" ]]; then
+          # --- SCOPES ---
+          # Introspection endpoint returns JSON: {"userId":...,"hubId":...,"appId":...,"scopes":[...]}
+          # We compute: required - granted. Empty → ok; non-empty → missing <list>.
+          required_scopes=(
+            crm.objects.contacts.read
+            crm.objects.contacts.write
+            crm.schemas.contacts.write
+            crm.lists.read
+            crm.lists.write
+            forms
+            content
+          )
+          if [[ $scopes_curl_exit -ne 0 ]]; then
+            echo "PREFLIGHT_SCOPES=error curl exited with code $scopes_curl_exit on scopes introspection"
+            required_failed=1
+          elif [[ "$scopes_status" != "200" ]]; then
+            echo "PREFLIGHT_SCOPES=error introspection endpoint returned HTTP $scopes_status"
+            required_failed=1
+          else
+            # Parse the body via python3 (reliable JSON) with a grep/sed fallback
+            # for hosts without python3.
+            granted=""
+            if command -v python3 >/dev/null 2>&1; then
+              granted=$(python3 -c '
+import json, sys
+try:
+    print(" ".join(json.load(open(sys.argv[1])).get("scopes", [])))
+except Exception:
+    pass
+' "$scopes_body_file" 2>/dev/null || true)
+            else
+              # Fallback: extract "scopes":[...] and clean up quotes/commas.
+              granted=$(tr -d '\n' <"$scopes_body_file" \
+                | sed -nE 's/.*"scopes"[[:space:]]*:[[:space:]]*\[([^]]*)\].*/\1/p' \
+                | tr -d '"' | tr ',' ' ')
+            fi
+
+            missing_scopes=()
+            for scope in "${required_scopes[@]}"; do
+              if [[ " $granted " != *" $scope "* ]]; then
+                missing_scopes+=("$scope")
+              fi
+            done
+
+            if [[ ${#missing_scopes[@]} -eq 0 ]]; then
+              echo "PREFLIGHT_SCOPES=ok"
+            else
+              missing_csv=$(IFS=,; echo "${missing_scopes[*]}")
+              echo "PREFLIGHT_SCOPES=missing $missing_csv"
+              required_failed=1
+            fi
+          fi
+
+          # --- PROJECT_SOURCE ---
+          if [[ $ps_curl_exit -ne 0 ]]; then
+            echo "PREFLIGHT_PROJECT_SOURCE=error curl exited with code $ps_curl_exit on project_source probe"
+            required_failed=1
+          else
+            case "$ps_status" in
+              200)
+                echo "PREFLIGHT_PROJECT_SOURCE=ok"
+                ;;
+              404)
+                # Recoverable, non-blocking: first project on the account.
+                echo "PREFLIGHT_PROJECT_SOURCE=missing (first project on this account — run account-setup module)"
+                ;;
+              *)
+                echo "PREFLIGHT_PROJECT_SOURCE=error HubSpot API returned HTTP $ps_status"
+                required_failed=1
+                ;;
+            esac
+          fi
+        else
+          echo "PREFLIGHT_SCOPES=skipped (API access failed)"
+          echo "PREFLIGHT_PROJECT_SOURCE=skipped (API access failed)"
+        fi
+      fi
+      ;;
+    empty)
+      echo "PREFLIGHT_CREDENTIAL=empty Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' exists but its value is blank"
+      echo "  Re-add it with: security add-generic-password -U -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'"
+      echo "PREFLIGHT_API_ACCESS=skipped (credential empty)"
+      echo "PREFLIGHT_SCOPES=skipped (credential empty)"
+      echo "PREFLIGHT_PROJECT_SOURCE=skipped (credential empty)"
+      required_failed=1
+      ;;
+    missing)
+      echo "PREFLIGHT_CREDENTIAL=missing Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' not found"
+      echo "  Add it with: security add-generic-password -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'"
+      echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
+      echo "PREFLIGHT_SCOPES=skipped (no credential)"
+      echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"
+      required_failed=1
+      ;;
+  esac
 fi
 
 # --- DNS ---
@@ -145,7 +366,10 @@ if [[ -z "$dns_tool" ]]; then
 elif [[ -n "$dns_result" ]]; then
   echo "PREFLIGHT_DNS=ok $DOMAIN resolves"
 else
-  echo "PREFLIGHT_DNS=missing $DOMAIN does not resolve"
+  # Compute the expected HubSpot CNAME target so the skill can tell the user
+  # exactly which DNS record to create.
+  expected_cname="${HUBSPOT_PORTAL_ID}.group0.sites.hscoscdn-${HUBSPOT_REGION}.net"
+  echo "PREFLIGHT_DNS=missing $DOMAIN does not resolve (expected CNAME target: $expected_cname)"
   required_failed=1
 fi
 

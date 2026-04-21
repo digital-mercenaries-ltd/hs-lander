@@ -1,7 +1,8 @@
 # Plan: Richer preflight.sh output for skill coaching
 
 **Date:** 2026-04-21
-**Status:** Ready for implementation — open questions resolved below.
+**Status:** Complete (2026-04-21) — shipped on branch `feat/preflight-richer-output`.
+**Verification:** 4 local test suites pass — 19 build + 12 post-apply + 10 terraform-plan + 44 preflight = 85 assertions total. 19 preflight scenarios. Credential-safety assertion (`bash -x` token leak check) passes.
 
 ## Context
 
