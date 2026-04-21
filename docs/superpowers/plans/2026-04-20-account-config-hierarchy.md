@@ -12,7 +12,7 @@ Replace the flat `project.config.sh` + `KEYCHAIN_PREFIX` derivation pattern with
 2. **Project config** at `~/.config/hs-lander/<account>/<project>.sh` — per landing page
 3. **Project sourcing chain** — `project.config.sh` in the project directory sources both, in order
 
-The framework remains org-agnostic. No DML-specific values or assumptions anywhere.
+The framework code (scripts, modules, scaffold, tests) remains org-agnostic — no DML-specific values or assumptions. Planning docs in `docs/` may reference DML as the primary consumer for context; the verification grep below is scoped to code directories only.
 
 ## Directory structure
 
@@ -89,7 +89,7 @@ source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
 # Account configs live at: ~/.config/hs-lander/<account>/config.sh
 # Project configs live at: ~/.config/hs-lander/<account>/<project>.sh
 #
-# See the framework docs for setup: https://github.com/digital-mercenaries-ltd/hs-lander/docs/framework.md
+# See the framework docs for setup: https://github.com/digital-mercenaries-ltd/hs-lander/blob/main/docs/framework.md
 
 HS_LANDER_ACCOUNT=""     # directory name under ~/.config/hs-lander/
 HS_LANDER_PROJECT=""     # project config filename (without .sh)
@@ -215,8 +215,11 @@ Add to CI (`ci.yml`) alongside existing test suites.
 - No changes needed
 
 **`scaffold/brief-template.md`**:
-- Remove `keychain_prefix:` field from the HubSpot Config section — this is now an account-level setting, not a brief field
-- Rename remaining fields to match the new config variable names
+- The HubSpot Config section currently has: `portal_id`, `region`, `domain`, `keychain_prefix`, `dm_upload_path`, `ga4_id`.
+- Move to account config (skill reads from `HS_LANDER_ACCOUNT`, not the brief): `portal_id`, `region`.
+- Keep as brief fields (project-specific, captured per landing page): `domain`, `dm_upload_path`, `ga4_id`.
+- Remove entirely (now derived from account config): `keychain_prefix`.
+- Replace the HubSpot Config section header with a `## Project Config` section containing only the three project-level fields, plus an `account:` field that names which account config to source (`HS_LANDER_ACCOUNT`).
 
 ### Tests
 
@@ -232,13 +235,13 @@ Add to CI (`ci.yml`) alongside existing test suites.
 - Replace `${KEYCHAIN_PREFIX}-hubspot-access-token` with `${HUBSPOT_TOKEN_KEYCHAIN_SERVICE}`
 
 **`tests/test-build.sh`**, **`tests/test-terraform-plan.sh`**:
-- Verify these don't reference `KEYCHAIN_PREFIX` — if they do, update
+- These don't reference `KEYCHAIN_PREFIX` directly — they inherit it via the `tests/fixtures/project.config.sh` fixture. No change needed; confirm by running both suites after fixture updates.
 
 ### CI workflows
 
-**`.github/workflows/smoke.yml`** (line 51):
-- Replace `KEYCHAIN_PREFIX="smoke"` with `HUBSPOT_TOKEN_KEYCHAIN_SERVICE="smoke-hubspot-access-token"`
-- Update the rest of the smoke test to use the new config structure
+The active CI workflow (`.github/workflows/ci.yml`) doesn't source `project.config.sh` or touch Keychain — no changes needed.
+
+The archived e2e smoke test (`docs/archive/workflows/smoke.yml`) contains the legacy `KEYCHAIN_PREFIX="smoke"` pattern. That file is reference-only per its own header and will be rewritten when roadmap v2.2 replaces it with a skill-driven e2e test — no action required here.
 
 ### Documentation
 

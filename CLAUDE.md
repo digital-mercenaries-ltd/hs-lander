@@ -100,7 +100,7 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 
 **Terraform modules** create HubSpot resources (forms, pages, email, lists). The `account-setup` module runs once per account; `landing-page` runs per project. Both inherit the `restapi` provider from the consuming project's root `main.tf` — they never take `hubspot_token` as a variable.
 
-**Scripts** are generic and config-driven. They source `project.config.sh` for values and derive Keychain service names from `KEYCHAIN_PREFIX`. Scripts live in this framework repo and are copied into per-project repos at scaffold time.
+**Scripts** are generic and config-driven. They source `project.config.sh` for values and derive Keychain service names from `KEYCHAIN_PREFIX` (v1.0.0 behaviour — the pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` replaces this with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` sourced from a two-tier account/project config). Scripts live in this framework repo and are copied into per-project repos at scaffold time.
 
 **Scaffold** is the template for new projects. A project's `terraform/main.tf` references these modules by git URL with a pinned version tag.
 
@@ -144,6 +144,6 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 
 ## Credential rules
 
-All secrets live in macOS Keychain. Pattern: `${KEYCHAIN_PREFIX}-hubspot-access-token`.
+All secrets live in macOS Keychain. Pattern (v1.0.0): `${KEYCHAIN_PREFIX}-hubspot-access-token` — this is superseded by the pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md`, which replaces the derivation with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` variable in the account config.
 **Never** write tokens to disk, env files, shell history, or terraform.tfvars.
 **Never** run `hs init`.

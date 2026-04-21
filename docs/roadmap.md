@@ -26,7 +26,7 @@ The [GA4 Admin API v1](https://developers.google.com/analytics/devops/rest/admin
 | **Terraform** (`hashicorp/google` provider) | `google_analytics_admin_property` + `google_analytics_admin_data_stream` resources fit naturally in per-project `main.tf` alongside HubSpot resources. Single `terraform apply` creates everything. | Adds a second provider + Google Cloud auth to every project. |
 | **Script** (`scripts/ga4-setup.sh`) | Standalone, can run before Terraform. Uses `gcloud` CLI or direct REST. | Separate step in the workflow; config writeback needed before build. |
 
-**Auth:** Google Cloud service account with Analytics Admin role. Credentials stored in Keychain as `${KEYCHAIN_PREFIX}-google-sa-key` or a shared `dml-google-sa-key`.
+**Auth:** Google Cloud service account with Analytics Admin role. Credentials stored in Keychain; the account config references them via `GOOGLE_SA_KEY_KEYCHAIN_SERVICE` (per the account-config-hierarchy plan).
 
 **Terraform is the preferred option** — it keeps all infrastructure in one plan and makes the GA4 property part of the project's managed state (so `terraform destroy` cleans it up too).
 
@@ -44,7 +44,7 @@ The [GA4 Admin API v1](https://developers.google.com/analytics/devops/rest/admin
 
 The [Cloudflare API v4](https://developers.cloudflare.com/api/resources/dns/subresources/records/) and [`cloudflare/cloudflare` Terraform provider](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs) support DNS record management:
 
-1. Create CNAME record: `${project_slug}.digitalmercenaries.ai` -> `${portal_id}.group0.sites.hscoscdn-eu1.net`
+1. Create CNAME record: `${project_slug}.${ACCOUNT_DOMAIN}` -> `${portal_id}.group0.sites.hscoscdn-${HUBSPOT_REGION}.net` (NA1 portals use `hscoscdn-na1.net`)
 2. Set proxy status to **DNS-only** (orange cloud off) — HubSpot manages its own SSL via Let's Encrypt
 
 **Implementation:**
@@ -59,13 +59,13 @@ provider "cloudflare" {
 resource "cloudflare_dns_record" "project_cname" {
   zone_id = var.cloudflare_zone_id
   name    = var.project_slug
-  content = "${var.hubspot_portal_id}.group0.sites.hscoscdn-eu1.net"
+  content = "${var.hubspot_portal_id}.group0.sites.hscoscdn-${var.hubspot_region}.net"
   type    = "CNAME"
   proxied = false
 }
 ```
 
-**Auth:** Cloudflare API token (DNS Edit scope for the `digitalmercenaries.ai` zone), stored in Keychain as `dml-cloudflare-api-token`.
+**Auth:** Cloudflare API token (DNS Edit scope for the managed zone), stored in Keychain and referenced via `CLOUDFLARE_TOKEN_KEYCHAIN_SERVICE` in the account config.
 
 **For client projects** using custom domains not on Cloudflare, this step remains manual — the skill detects whether the domain zone is Cloudflare-managed and falls back to instructions.
 
@@ -133,7 +133,9 @@ When v1.1-v1.3 are complete, the skill workflow from ICB to live landing page be
 
 ## v2.0: CI/CD with GitHub Secrets
 
-**Current state:** All config and credentials are local — account profiles at `~/.config/hs-lander/`, secrets in macOS Keychain. Deployment runs locally via `npm run deploy`.
+**Depends on:** the account-config-hierarchy refactor (`docs/superpowers/plans/2026-04-20-account-config-hierarchy.md`). The two-tier mapping below assumes account profiles exist at `~/.config/hs-lander/<account>/`; that layout does not yet exist on v1.0.0.
+
+**Current state (post-hierarchy-refactor):** All config and credentials are local — account profiles at `~/.config/hs-lander/`, secrets in macOS Keychain. Deployment runs locally via `npm run deploy`.
 
 **Goal:** Support running the full build-deploy pipeline in GitHub Actions, with credentials stored as GitHub Secrets and config as repository variables.
 
@@ -165,7 +167,9 @@ The local account profile system (`~/.config/hs-lander/<account>/config.sh`) map
 
 ## v2.1: Account Profile Sync
 
-**Current state:** Account profiles are local files. Team members must create their own copies manually.
+**Depends on:** the account-config-hierarchy refactor (same as v2.0).
+
+**Current state (post-hierarchy-refactor):** Account profiles are local files. Team members must create their own copies manually.
 
 **Goal:** `hs-lander accounts sync` pulls account profiles from a shared source (team repo or GitHub org config).
 

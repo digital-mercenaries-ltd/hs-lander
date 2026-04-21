@@ -5,6 +5,8 @@
 **/.terraform/
 **/.terraform.lock.hcl
 **/*.tfplan
+**/*.tfstate
+**/*.tfstate.backup
 tests/fixtures/terraform/plan.txt
 
 # OS

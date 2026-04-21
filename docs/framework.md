@@ -83,6 +83,8 @@ All credentials are stored in macOS Keychain. Scripts read them via `security fi
 | `${KEYCHAIN_PREFIX}-hubspot-access-token` | HubSpot Service Key |
 | `${KEYCHAIN_PREFIX}-hubspot-pak` | Optional — PAK for HubSpot CLI |
 
+> **Being revised:** this section describes the v1.0.0 flat-config pattern. The pending refactor at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` replaces `KEYCHAIN_PREFIX` derivation with an explicit `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` sourced from a two-tier account/project config, and drops the optional PAK entry (not part of the core workflow).
+
 ## Prerequisites
 
 - HubSpot Marketing Hub Starter + Content Hub Starter
