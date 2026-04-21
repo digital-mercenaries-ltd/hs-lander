@@ -45,7 +45,7 @@ Example of a blank-state run:
 PREFLIGHT_PROJECT_POINTER=ok
 PREFLIGHT_ACCOUNT_PROFILE=incomplete HUBSPOT_PORTAL_ID,HUBSPOT_TOKEN_KEYCHAIN_SERVICE
 PREFLIGHT_PROJECT_PROFILE=missing ~/.config/hs-lander/myacct/myproj.sh
-PREFLIGHT_CREDENTIAL=skipped (account profile incomplete)
+PREFLIGHT_CREDENTIAL=skipped (account profile missing or incomplete)
 PREFLIGHT_API_ACCESS=skipped (no credential)
 PREFLIGHT_SCOPES=skipped (no credential)
 PREFLIGHT_PROJECT_SOURCE=skipped (no credential)

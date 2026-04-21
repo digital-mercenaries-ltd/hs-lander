@@ -82,14 +82,21 @@ _extract_pointer_vars() {
 # requested vars. Used for account / project config files where we want the
 # file's own semantics but not the side effect on the parent shell.
 #
-# Limitation: if the sourced file itself sets `set -u` and then references an
-# unbound variable, bash exits the subshell before reaching the printf loop,
-# and `_source_vars` returns empty stdout. The parent then sees all requested
-# vars as empty and reports ACCOUNT_PROFILE/PROJECT_PROFILE=incomplete — a
-# plausible-looking but misleading diagnosis. The scaffold-shipped configs
-# don't set -u, so this is a theoretical concern. We re-assert `set +u` after
-# the source anyway so the loop is safe if the sourced file only disables
-# set -u lazily.
+# Residual edge case (not fully handled):
+# If the sourced file itself runs `set -u` AND references an unbound
+# variable DURING source execution, bash exits the subshell immediately.
+# The printf loop below never runs; `_source_vars` returns empty stdout.
+# The parent then sees all requested vars as empty and reports
+# ACCOUNT_PROFILE/PROJECT_PROFILE=incomplete with the full field list — a
+# plausible-looking but mis-specific diagnosis (the real problem is
+# "the file has a set-u error", not "every field is missing").
+#
+# The `set +u` after `source` below is defence-in-depth for the narrower
+# case where the sourced file enables set -u but doesn't reference anything
+# unbound; it does NOT rescue the mid-source-abort case above.
+#
+# Scaffold-shipped configs don't use set -u, so this is a theoretical
+# concern for hand-edited configs.
 _source_vars() {
   local path="$1"; shift
   (
@@ -142,6 +149,13 @@ fi
 echo "PREFLIGHT_PROJECT_POINTER=ok"
 
 # --- ACCOUNT_PROFILE ---
+# Tracks whether the account profile is both present and complete. Used by
+# the CREDENTIAL check below so a broken account profile surfaces as
+# CREDENTIAL=skipped (pointing the skill at the root cause in the
+# ACCOUNT_PROFILE line) rather than a misleading CREDENTIAL=missing that
+# would have the skill coach the user to add a Keychain entry when the real
+# problem is upstream.
+account_profile_ok=0
 account_config="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
 if [[ ! -f "$account_config" ]]; then
   echo "PREFLIGHT_ACCOUNT_PROFILE=missing $account_config does not exist"
@@ -154,6 +168,7 @@ else
   done
   if [[ ${#account_missing[@]} -eq 0 ]]; then
     echo "PREFLIGHT_ACCOUNT_PROFILE=ok"
+    account_profile_ok=1
   else
     missing_csv=$(IFS=,; echo "${account_missing[*]}")
     echo "PREFLIGHT_ACCOUNT_PROFILE=incomplete $missing_csv"
@@ -183,8 +198,13 @@ fi
 
 # --- Credential + API checks ---
 
-if [[ -z "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:-}" ]]; then
-  echo "PREFLIGHT_CREDENTIAL=missing HUBSPOT_TOKEN_KEYCHAIN_SERVICE not set in account config"
+if [[ $account_profile_ok -eq 0 ]]; then
+  # Account profile is missing or incomplete; the ACCOUNT_PROFILE line above
+  # has already told the skill the root cause. Don't attempt a Keychain
+  # lookup (HUBSPOT_TOKEN_KEYCHAIN_SERVICE is absent or empty anyway) and
+  # don't conflate this with CREDENTIAL=missing, which the skill treats
+  # as "add a Keychain entry for the service name from your account config".
+  echo "PREFLIGHT_CREDENTIAL=skipped (account profile missing or incomplete)"
   echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
   echo "PREFLIGHT_SCOPES=skipped (no credential)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"

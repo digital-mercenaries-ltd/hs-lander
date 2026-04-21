@@ -244,10 +244,13 @@ assert_file_contains "$LOG1" "PREFLIGHT_API_ACCESS=ok" "API access ok"
 assert_file_contains "$LOG1" "PREFLIGHT_DNS=ok" "DNS check ok"
 assert_full_contract "$LOG1" "Scenario 1"
 
-# --- Scenario 2: missing HUBSPOT_TOKEN_KEYCHAIN_SERVICE → credential=missing, exit 1 ---
+# --- Scenario 2: HUBSPOT_TOKEN_KEYCHAIN_SERVICE empty in account config →
+#     ACCOUNT_PROFILE=incomplete → CREDENTIAL=skipped (account is root cause).
+#     We reserve CREDENTIAL=missing for the case where the account profile
+#     is OK but the Keychain entry doesn't exist — see Scenario M.
 
 echo ""
-echo "--- Scenario 2: missing HUBSPOT_TOKEN_KEYCHAIN_SERVICE ---"
+echo "--- Scenario 2: HUBSPOT_TOKEN_KEYCHAIN_SERVICE empty in account config ---"
 TMP2=$(setup_env)
 CFG_HUBSPOT_TOKEN_KEYCHAIN_SERVICE="" write_account_config "$TMP2"
 write_project_config "$TMP2"
@@ -255,8 +258,9 @@ write_project_sourcing_chain "$TMP2"
 write_mock_bin "$TMP2"
 LOG2="$TMP2/preflight.log"
 exit2=$(run_preflight_capture "$TMP2" "$LOG2" || true)
-assert_equal "$exit2" "1" "exit code 1 when credential reference missing"
-assert_file_contains "$LOG2" "PREFLIGHT_CREDENTIAL=missing" "credential reported missing"
+assert_equal "$exit2" "1" "exit 1 when account config has empty HUBSPOT_TOKEN_KEYCHAIN_SERVICE"
+assert_file_contains "$LOG2" "PREFLIGHT_ACCOUNT_PROFILE=incomplete" "account profile reported incomplete"
+assert_file_contains "$LOG2" "PREFLIGHT_CREDENTIAL=skipped" "credential reported skipped (not missing) when root cause is account profile"
 
 # --- Scenario 3: empty GA4_MEASUREMENT_ID → warn, exit 0 ---
 
@@ -406,6 +410,24 @@ assert_equal "$exitK" "1" "exit code 1 when DNS does not resolve"
 # Portal ID 12345678, region eu1 → 12345678.group0.sites.hscoscdn-eu1.net
 assert_file_contains "$LOGK" "12345678.group0.sites.hscoscdn-eu1.net" "expected CNAME target included in DNS missing detail"
 
+# --- Scenario M: account profile OK, but the Keychain entry named by
+#     HUBSPOT_TOKEN_KEYCHAIN_SERVICE doesn't exist → CREDENTIAL=missing.
+#     This is the case where the skill should coach the user to add a
+#     Keychain entry — distinct from Scenario 2 (account config broken).
+
+echo ""
+echo "--- Scenario M: Keychain entry absent (account profile ok) ---"
+TMPM=$(setup_env)
+CFG_HUBSPOT_TOKEN_KEYCHAIN_SERVICE="nonexistent-keychain-entry" write_account_config "$TMPM"
+write_project_config "$TMPM"
+write_project_sourcing_chain "$TMPM"
+write_mock_bin "$TMPM"
+LOGM="$TMPM/preflight.log"
+exitM=$(run_preflight_capture "$TMPM" "$LOGM" || true)
+assert_equal "$exitM" "1" "exit 1 when Keychain entry absent"
+assert_file_contains "$LOGM" "PREFLIGHT_ACCOUNT_PROFILE=ok" "account profile ok when service name is set but entry doesn't exist"
+assert_file_contains "$LOGM" "PREFLIGHT_CREDENTIAL=missing" "credential reported missing — skill should coach adding a Keychain entry"
+
 # --- Scenario I: SCOPES=ok (introspection endpoint lists all 7 required) ---
 # Default mock body returns all 7 required scopes.
 
@@ -518,7 +540,51 @@ assert_equal "$exitD" "1" "exit 1 when project config is missing"
 assert_file_contains "$LOGD" "PREFLIGHT_PROJECT_PROFILE=missing" "project profile reported missing"
 assert_full_contract "$LOGD" "Scenario D"
 
+# --- Scenario N: pointer file with single-quoted values ---
+# Locks down the awk extractor's \x27 branch — macOS BWK awk isn't
+# documented to support \xNN hex escapes, so this is a portability
+# regression guard. Also exercises the "unquoted" branch via the same
+# kind of real-file round-trip.
+
+echo ""
+echo "--- Scenario N: pointer with single-quoted values ---"
+TMPN=$(setup_env)
+write_account_config "$TMPN"
+write_project_config "$TMPN"
+cat > "$TMPN/project/project.config.sh" <<'POINTER'
+HS_LANDER_ACCOUNT='testacct'
+HS_LANDER_PROJECT='testproj'
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+POINTER
+write_mock_bin "$TMPN"
+LOGN="$TMPN/preflight.log"
+exitN=$(run_preflight_capture "$TMPN" "$LOGN" || true)
+assert_equal "$exitN" "0" "single-quoted pointer parses successfully (exit 0)"
+assert_file_contains "$LOGN" "PREFLIGHT_PROJECT_POINTER=ok" "pointer reported ok with single-quoted values"
+assert_file_contains "$LOGN" "PREFLIGHT_ACCOUNT_PROFILE=ok" "downstream ACCOUNT_PROFILE=ok proves the single-quoted account name resolved to a real file"
+
+# --- Scenario N2: pointer file with unquoted and `export`-prefixed values ---
+
+echo ""
+echo "--- Scenario N2: pointer with unquoted + export-prefixed values ---"
+TMPN2=$(setup_env)
+write_account_config "$TMPN2"
+write_project_config "$TMPN2"
+cat > "$TMPN2/project/project.config.sh" <<'POINTER'
+export HS_LANDER_ACCOUNT=testacct
+HS_LANDER_PROJECT=testproj  # trailing comment on unquoted value
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
+source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+POINTER
+write_mock_bin "$TMPN2"
+LOGN2="$TMPN2/preflight.log"
+exitN2=$(run_preflight_capture "$TMPN2" "$LOGN2" || true)
+assert_equal "$exitN2" "0" "unquoted+export pointer parses successfully (exit 0)"
+assert_file_contains "$LOGN2" "PREFLIGHT_PROJECT_POINTER=ok" "pointer reported ok with unquoted+export values"
+assert_file_contains "$LOGN2" "PREFLIGHT_ACCOUNT_PROFILE=ok" "downstream ACCOUNT_PROFILE=ok proves unquoted+export resolved"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}"' EXIT
 
 test_summary
