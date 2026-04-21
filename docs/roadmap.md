@@ -14,7 +14,7 @@ Items beyond v1.0.0. Each reduces the manual steps between ICB and live landing 
 
 The [GA4 Admin API v1](https://developers.google.com/analytics/devops/rest/admin/v1) supports programmatic property and data stream creation:
 
-1. Create GA4 property (`properties.create`) under the DML Analytics account
+1. Create GA4 property (`properties.create`) under the account's Google Analytics organisation
 2. Create web data stream for the project domain (`properties.dataStreams.create`)
 3. Extract Measurement ID (`G-XXXXXXXXXX`) from the response
 4. Write `GA4_MEASUREMENT_ID` into `project.config.sh`
@@ -38,13 +38,13 @@ The [GA4 Admin API v1](https://developers.google.com/analytics/devops/rest/admin
 
 **Goal:** Skill creates the DNS record automatically when scaffolding a new project.
 
-**Prerequisite:** Migrate `digitalmercenaries.ai` nameservers to Cloudflare. Cloudflare has the best API tooling and Terraform support of any DNS provider.
+**Prerequisite:** The account's primary DNS zone is managed by Cloudflare (Cloudflare has the best API tooling and Terraform support of any DNS provider). For client projects on zones not managed by Cloudflare, see the fallback note at the end of this section.
 
 **Approach:**
 
 The [Cloudflare API v4](https://developers.cloudflare.com/api/resources/dns/subresources/records/) and [`cloudflare/cloudflare` Terraform provider](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs) support DNS record management:
 
-1. Create CNAME record: `${project_slug}.${ACCOUNT_DOMAIN}` -> `${portal_id}.group0.sites.hscoscdn-${HUBSPOT_REGION}.net` (NA1 portals use `hscoscdn-na1.net`)
+1. Create CNAME record: project domain (`$DOMAIN` from project config) -> `${portal_id}.group0.sites.hscoscdn-${HUBSPOT_REGION}.net` (NA1 portals use `hscoscdn-na1.net`)
 2. Set proxy status to **DNS-only** (orange cloud off) — HubSpot manages its own SSL via Let's Encrypt
 
 **Implementation:**
@@ -192,9 +192,9 @@ An earlier draft of this test lived at `.github/workflows/smoke.yml`; it was arc
 | Resource | Test home |
 |---|---|
 | HubSpot | **Developer test account** (HubSpot provides free sandbox portals under any developer account). Separate portal ID from production. |
-| GA4 | A dedicated GA4 **test property** under the DML Analytics account, or a sandbox GA4 account. |
-| Cloudflare DNS | A test subdomain on the managed zone (e.g. `*.smoke-test.digitalmercenaries.ai`) or a disposable zone. |
-| GitHub | Open question — likely a dedicated throwaway repo in `digital-mercenaries-ltd-sandbox` (or similar). Only needed once the skill itself creates a GitHub repo as part of scaffolding. |
+| GA4 | A dedicated GA4 **test property** under the account's Google Analytics organisation, or a sandbox GA4 account. |
+| Cloudflare DNS | A test subdomain on the managed zone (e.g. `*.smoke-test.<account-domain>`) or a disposable zone. |
+| GitHub | Open question — likely a dedicated throwaway repo under the account's GitHub org (a `*-sandbox` variant works well). Only needed once the skill itself creates a GitHub repo as part of scaffolding. |
 
 **Approach:**
 
@@ -213,4 +213,4 @@ An earlier draft of this test lived at `.github/workflows/smoke.yml`; it was arc
 
 **Why this is worth doing:**
 
-Manual verification per project (Heard today, TSC next, etc.) catches project-specific issues but not framework regressions. An automated e2e test run after any change to modules, scripts, or the skill itself gives confidence that the pipeline still works end-to-end before a project depends on it.
+Manual verification per project catches project-specific issues but not framework regressions. An automated e2e test run after any change to modules, scripts, or the skill itself gives confidence that the pipeline still works end-to-end before a project depends on it.

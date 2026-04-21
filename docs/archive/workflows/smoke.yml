@@ -7,8 +7,8 @@
 # Moved out of CI on 2026-04-21 because:
 #   - Requires GitHub Secrets configuration (HUBSPOT_TOKEN, HUBSPOT_PORTAL_ID,
 #     HUBSPOT_REGION, SMOKE_DOMAIN) — deferred per docs/roadmap.md (v2.0)
-#   - End-to-end deployment testing is being done manually via the Heard
-#     project at this stage
+#   - End-to-end deployment testing is being done manually per-project
+#     at this stage
 #   - A proper skill-driven e2e test (spinning up isolated HubSpot sandbox +
 #     GA4 test property + optional test GitHub repo) is the intended future
 #     replacement — see docs/roadmap.md (v2.2)

@@ -19,7 +19,7 @@ v1.0.0 framework built (Session 2 of the orchestration plan complete). All scrip
 **Next:**
 - Account/project config hierarchy refactor — plan at `docs/superpowers/plans/2026-04-20-account-config-hierarchy.md` (replaces `KEYCHAIN_PREFIX` with two-tier `~/.config/hs-lander/<account>/`)
 - Session 3: add `hs-lander` skill in `~/DocsLocal/skills/` per the orchestration plan
-- End-to-end deployment testing is being done manually via the Heard project at this stage; automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
+- End-to-end deployment testing is done manually per-project at this stage; an automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
 
 **Reference docs:**
 - Design spec: `~/DocsLocal/digital-mercenaries-ltd/dml-github-org-config/docs/specs/2026-04-10-hs-lander-design.md`

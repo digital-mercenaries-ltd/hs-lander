@@ -12,19 +12,19 @@ Replace the flat `project.config.sh` + `KEYCHAIN_PREFIX` derivation pattern with
 2. **Project config** at `~/.config/hs-lander/<account>/<project>.sh` — per landing page
 3. **Project sourcing chain** — `project.config.sh` in the project directory sources both, in order
 
-The framework code (scripts, modules, scaffold, tests) remains org-agnostic — no DML-specific values or assumptions. Planning docs in `docs/` may reference DML as the primary consumer for context; the verification grep below is scoped to code directories only.
+The framework must remain organisation- and project-agnostic. No org or project names in scripts, Terraform modules, scaffold, tests, or user-facing docs (README, framework guide, roadmap). Plans and historical records under `docs/superpowers/plans/` may carry DML-specific context for the original implementation, but the grep verification step below enforces agnosticism for everything that will be adopted by other orgs.
 
 ## Directory structure
 
 ```
 ~/.config/hs-lander/
-  dml/                              # One directory per HubSpot account
+  <account-a>/                      # One directory per HubSpot account
     config.sh                       # Account-level settings + credential references
-    heard.sh                        # Project: Heard landing page
-    tsc.sh                          # Project: TSC test instance
-  tcl/                              # Different HubSpot account
+    <project-1>.sh                  # Project config
+    <project-2>.sh                  # Another project on the same account
+  <account-b>/                      # Different HubSpot account
     config.sh
-    tsc-landing.sh
+    <project>.sh
 ```
 
 ## Account config format
@@ -36,14 +36,21 @@ The framework code (scripts, modules, scaffold, tests) remains org-agnostic — 
 # HubSpot account-level settings. Shared by all projects on this account.
 
 # Account settings (non-secret)
-HUBSPOT_PORTAL_ID=""               # e.g. 147959629
+HUBSPOT_PORTAL_ID=""               # e.g. 12345678
 HUBSPOT_REGION=""                  # eu1 or na1
-DOMAIN_PATTERN=""                  # e.g. *.digitalmercenaries.ai (used by skill to propose project domains)
+DOMAIN_PATTERN=""                  # e.g. *.example.com (used by skill to propose project domains)
 
 # Credential references — Keychain service names (NOT secret values)
 # The actual tokens live in macOS Keychain and are read at runtime by scripts.
-HUBSPOT_TOKEN_KEYCHAIN_SERVICE=""  # e.g. dml-hubspot-access-token
+HUBSPOT_TOKEN_KEYCHAIN_SERVICE=""  # e.g. <account>-hubspot-access-token
 ```
+
+Additional service references may be added to the account config as future roadmap items land. The naming convention is `<PURPOSE>_KEYCHAIN_SERVICE` for each credential. Examples that will appear later:
+
+- `GOOGLE_SA_KEY_KEYCHAIN_SERVICE` — v1.1 (GA4 auto-setup)
+- `CLOUDFLARE_TOKEN_KEYCHAIN_SERVICE` — v1.2 (Cloudflare DNS)
+
+This plan only defines `HUBSPOT_TOKEN_KEYCHAIN_SERVICE`; subsequent plans that introduce those features will add their own variables to the account config schema.
 
 ## Project config format
 
@@ -54,9 +61,9 @@ HUBSPOT_TOKEN_KEYCHAIN_SERVICE=""  # e.g. dml-hubspot-access-token
 # Project-level settings for one landing page.
 
 # Project settings (non-secret)
-PROJECT_SLUG=""                    # e.g. heard
-DOMAIN=""                          # e.g. heard.digitalmercenaries.ai
-DM_UPLOAD_PATH=""                  # e.g. /heard
+PROJECT_SLUG=""                    # e.g. my-project
+DOMAIN=""                          # e.g. landing.example.com
+DM_UPLOAD_PATH=""                  # e.g. /my-project
 GA4_MEASUREMENT_ID=""              # e.g. G-XXXXXXXXXX
 
 # Populated by post-apply.sh after terraform apply
@@ -73,8 +80,8 @@ LIST_ID=""
 # project.config.sh — sources account + project config
 # This file is gitignored. Copy from project.config.example.sh and set the two paths.
 
-HS_LANDER_ACCOUNT="dml"
-HS_LANDER_PROJECT="heard"
+HS_LANDER_ACCOUNT="<account>"
+HS_LANDER_PROJECT="<project>"
 
 source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"
 source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
@@ -149,7 +156,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 #   PREFLIGHT_CREDENTIAL=ok
 #   PREFLIGHT_API_ACCESS=ok
 #   PREFLIGHT_PROJECT_SOURCE=missing (first project on this account — account-setup module needed)
-#   PREFLIGHT_DNS=ok heard.digitalmercenaries.ai resolves
+#   PREFLIGHT_DNS=ok landing.example.com resolves
 #   PREFLIGHT_GA4=warn GA4_MEASUREMENT_ID is empty
 #   PREFLIGHT_FORM_IDS=warn CAPTURE_FORM_ID is empty (expected before first deploy)
 ```
@@ -194,9 +201,7 @@ Add to CI (`ci.yml`) alongside existing test suites.
 - Same replacement as tf.sh
 
 **`scripts/hs.sh`** (lines 15-17):
-- This script uses `${KEYCHAIN_PREFIX}-hubspot-pak` for the optional CLI PAK
-- Replace with a new optional config variable `HUBSPOT_PAK_KEYCHAIN_SERVICE`
-- If not set, skip PAK lookup with a clear message
+- Remove the `${KEYCHAIN_PREFIX}-hubspot-pak` lookup entirely. The PAK path is not part of the core workflow (Service Key handles everything via `upload.sh` + REST). Simplify `hs.sh` to use the Service Key via `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` like the other scripts, or deprecate the script if it has no remaining purpose once the PAK path is gone.
 
 **`scripts/deploy.sh`**, **`scripts/build.sh`**, **`scripts/watch.sh`**, **`scripts/post-apply.sh`**:
 - These source `project.config.sh` but don't use `KEYCHAIN_PREFIX` directly — verify and confirm no changes needed
@@ -253,21 +258,24 @@ The archived e2e smoke test (`docs/archive/workflows/smoke.yml`) contains the le
 **`docs/framework.md`**:
 - Rewrite Authentication section to describe the two-tier config
 - Remove `KEYCHAIN_PREFIX` references
-- Remove `${KEYCHAIN_PREFIX}-hubspot-pak` optional entry (PAK is not part of core workflow)
-- Fix scope list: 7 scopes, not 8 (transactional-email was dropped)
+- Remove `${KEYCHAIN_PREFIX}-hubspot-pak` optional entry (PAK is not part of core workflow — consistent with the `hs.sh` change above)
+- Remove the "Being revised" blockquote once the rewrite lands
+
+*Already applied in PR #2:* scope list fix (8 -> 7; `transactional-email` dropped).
 
 **`README.md`**:
 - Update quick-start section if it references config setup
 
 **`docs/roadmap.md`**:
-- Update the Cloudflare DNS section to use `CLOUDFLARE_TOKEN_KEYCHAIN_SERVICE` instead of `KEYCHAIN_PREFIX`-based naming
-- Update the GA4 section similarly
+- Replace any remaining `KEYCHAIN_PREFIX`-derived examples with explicit `<PURPOSE>_KEYCHAIN_SERVICE` variables
+
+*Already applied in PR #2:* GA4 and Cloudflare auth sections updated to `GOOGLE_SA_KEY_KEYCHAIN_SERVICE` and `CLOUDFLARE_TOKEN_KEYCHAIN_SERVICE`; dependency notes added to v2.0 and v2.1.
 
 ---
 
 ## Migration path for existing projects
 
-Existing projects (TSC) that use the old `KEYCHAIN_PREFIX` flat config will need a one-time migration:
+Any existing project using the v1.0.0 flat `KEYCHAIN_PREFIX` config will need a one-time migration:
 
 1. Create `~/.config/hs-lander/<account>/config.sh` with account values
 2. Create `~/.config/hs-lander/<account>/<project>.sh` with project values
@@ -293,6 +301,6 @@ After implementation:
 1. `~/.config/hs-lander/test/config.sh` exists with test account values
 2. `~/.config/hs-lander/test/testproject.sh` exists with test project values
 3. All 3 local test suites pass (test-build, test-post-apply, test-terraform-plan)
-4. `grep -r 'KEYCHAIN_PREFIX' scripts/ scaffold/ tests/` returns zero hits
-5. `grep -r 'digitalmercenaries\|DML\|Nishbert\|dml-' scripts/ scaffold/ tests/` returns zero hits (excluding docs/plans/)
-6. Existing TSC project still builds after migration to new config format
+4. `grep -r 'KEYCHAIN_PREFIX' scripts/ scaffold/ tests/ terraform/` returns zero hits
+5. `grep -rE 'digitalmercenaries|DML|dml-|Nishbert|heard|Heard|tsc|TSC' scripts/ scaffold/ tests/ terraform/ docs/framework.md docs/roadmap.md README.md` returns zero hits — this is the org/project-agnosticism check. Plans under `docs/superpowers/plans/` are excluded (historical artefacts); if you add a new adopting-org name to this list, add it to the grep too.
+6. A v1.0.0-migrated project (any) still builds after switching to the new config format.
