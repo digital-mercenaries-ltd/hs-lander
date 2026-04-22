@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6.3 (2026-04-23)
+
+Patch — HubSpot Forms v3 now requires `privacyText` inside `legalConsentOptions` when `type = "implicit_consent_to_process"`. Previously accepted without it; the v3 API now rejects form creation with `Some required fields were not set: [privacyText]`. New optional module input with a GDPR-adequate default; no breaking change.
+
+### Fixed
+
+- **Form creation rejected for missing `privacyText`.** Both `capture_form` and `survey_form` now declare `privacyText = var.privacy_text` inside `legalConsentOptions`. New module variable `privacy_text` defaults to a generic disclosure (`"We'll use the information you provide to send you occasional updates. You can unsubscribe at any time."`). Consumers override per-project when specific legal text is needed.
+
+### Migration
+
+No migration needed — the new variable has a default, so projects re-pinning `?ref=v1.6.2` → `?ref=v1.6.3` pick it up automatically on the next `tf:init -upgrade && tf:plan`. For projects that want custom legal text, pass `privacy_text = "..."` to the `landing_page` module call, or set the variable's value at the root by declaring `variable "privacy_text" { type = string }` and wiring it to `module.landing_page.privacy_text`.
+
+`PRIVACY_TEXT` is not on the `set-project-field.sh` allow-list yet; the module default is expected to suit most projects. Adding a project-profile key for it is tracked as a follow-up if consumers start overriding it often.
+
 ## v1.6.2 (2026-04-23)
 
 Patch — three small source fixes surfaced by Heard's 2026-04-23 re-deploy against v1.6.1, plus a documented recovery path for pre-v1.6.0 emails stuck in the legacy payload shape. No module inputs or outputs change; no script changes.

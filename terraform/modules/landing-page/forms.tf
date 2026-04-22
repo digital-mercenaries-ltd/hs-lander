@@ -13,6 +13,12 @@
 #   segmentation we use single_line_text with a defaultValue and hide it in
 #   the rendered form via CSS (scaffolded main.css hides
 #   input[name="project_source"] and its wrapping field group).
+# - legalConsentOptions.privacyText is REQUIRED in v3 when
+#   type = "implicit_consent_to_process". Previously accepted without it;
+#   v3 rejects with "Some required fields were not set: [privacyText]".
+#   Value comes from var.privacy_text (module default is a generic GDPR-
+#   adequate disclosure; consumers override per-project when specific
+#   legal text is needed).
 # - richTextType must be one of [image, text]. The v1/v2 value "NONE" is
 #   rejected in v3 ("Enum type must be one of: [image, text]"). We use
 #   "text" as the safe default — it declares "this field group carries
@@ -74,7 +80,8 @@ resource "restapi_object" "capture_form" {
       }
     ]
     legalConsentOptions = {
-      type = "implicit_consent_to_process"
+      type        = "implicit_consent_to_process"
+      privacyText = var.privacy_text
     }
     configuration = {
       language = "en"
@@ -135,7 +142,8 @@ resource "restapi_object" "survey_form" {
       }
     ]
     legalConsentOptions = {
-      type = "implicit_consent_to_process"
+      type        = "implicit_consent_to_process"
+      privacyText = var.privacy_text
     }
     configuration = {
       language = "en"
