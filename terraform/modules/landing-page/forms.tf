@@ -13,6 +13,12 @@
 #   segmentation we use single_line_text with a defaultValue and hide it in
 #   the rendered form via CSS (scaffolded main.css hides
 #   input[name="project_source"] and its wrapping field group).
+# - richTextType must be one of [image, text]. The v1/v2 value "NONE" is
+#   rejected in v3 ("Enum type must be one of: [image, text]"). We use
+#   "text" as the safe default — it declares "this field group carries
+#   rich-text metadata" which is a no-op when no rich-text content is
+#   present. Removing the key entirely is not safe: v3 schema flags it
+#   required on field groups.
 
 resource "restapi_object" "capture_form" {
   path          = "/marketing/v3/forms"
@@ -26,7 +32,7 @@ resource "restapi_object" "capture_form" {
     fieldGroups = [
       {
         groupType    = "default_group"
-        richTextType = "NONE"
+        richTextType = "text"
         fields = concat(
           # Email field (always present, with required validation block)
           [
@@ -89,7 +95,7 @@ resource "restapi_object" "survey_form" {
     fieldGroups = [
       {
         groupType    = "default_group"
-        richTextType = "NONE"
+        richTextType = "text"
         fields = concat(
           [
             {
@@ -113,11 +119,14 @@ resource "restapi_object" "survey_form" {
             objectTypeId = "0-1"
             required     = field.required
           }],
+          # project_source segmentation field — hidden in the rendered form
+          # via CSS (see scaffold/src/css/main.css). Kept as
+          # single_line_text because Forms v3 rejects fieldType = "hidden".
           [
             {
               name         = "project_source"
               label        = "Project Source"
-              fieldType    = "hidden"
+              fieldType    = "single_line_text"
               objectTypeId = "0-1"
               defaultValue = var.project_slug
             }

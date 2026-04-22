@@ -58,6 +58,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | v1.5.0 (pending merge — PR #11) | — | API drift fixes part 2: marketing-email restructure; hosting-modes plumbing (`LANDING_SLUG`, `THANKYOU_SLUG`, account-level subscription + office-location IDs) |
 | v1.6.0 | — | API drift fixes part 3 (from Heard v1.5.0 apply): welcome-email PATCH rejects state/publish toggles (→ `update_data` split); Forms v3 dropped `fieldType = "hidden"` (→ `single_line_text` + scaffold CSS hide); Lists API wraps response in `{"list":{...}}` (→ `id_attribute = "list/listId"` + `ignore_all_server_changes`) |
 | v1.6.1 | — | Mastercard/restapi provider constraint `~> 1.19` → `~> 2.0` in all three files that declare it. v1.6.0's `ignore_all_server_changes` attribute requires provider 2.0.0+; the v1.19 cap made it unusable. No module contract changes. |
+| v1.6.2 | — | Heard v1.6.1 apply drift: `survey_form` missed `fieldType` normalisation (`hidden` → `single_line_text`); both forms' `richTextType = "NONE"` rejected by v3 (`→ "text"`); `landing_page` PATCH hit `PAGE_EXISTS` on `slug=""` collisions (→ `data`/`update_data` split mirroring the v1.6.0 email pattern — `slug`/`domain`/`state` dropped from PATCH). Plus a documented `terraform taint` recovery for pre-v1.6.0 emails stuck in `BATCH_EMAIL`/`DRAFT`. |
 
 ---
 

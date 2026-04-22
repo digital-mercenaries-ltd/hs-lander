@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.6.2 (2026-04-23)
+
+Patch — three small source fixes surfaced by Heard's 2026-04-23 re-deploy against v1.6.1, plus a documented recovery path for pre-v1.6.0 emails stuck in the legacy payload shape. No module inputs or outputs change; no script changes.
+
+### Fixed
+
+- **`survey_form` still used `fieldType = "hidden"`.** v1.6.0 converted `capture_form` from `"hidden"` to `"single_line_text"` but the matching edit to `survey_form` (`forms.tf:120`) was missed — the two blocks had different leading comments so a `replace_all` match slipped by. Apply errored with the same `Could not resolve type id 'hidden' as a subtype of FieldBase` v1.6.0 fixed for `capture_form`. Normalised the surrounding comment block so future edits catch both variants.
+- **Forms v3 tightened `richTextType` to `[image, text]`.** Both form field-groups declared `richTextType = "NONE"`, previously accepted, now rejected with `Enum type must be one of: [image, text]`. Masked by the earlier `"hidden"` error in v1.6.0 probes. Both field groups now use `"text"` (the safe default — declares "this field group carries rich-text metadata" which is a no-op when no rich-text content is present). Dropping the key entirely is not safe: v3 schema flags it required on field groups.
+- **`landing_page` PATCH hit `PAGE_EXISTS` when `slug=""` was sent.** The landing-page resource sent `slug`, `domain`, `state` on every PATCH. On a portal whose system domain already hosts a root-slug page (TSC's `tsc-landing.digitalmercenaries.ai/`), a PATCH to `slug = ""` fell through HubSpot's primary-landing-page resolution and collided with the existing root page, failing the whole apply before any real change (a name/title tweak) could reconcile. Both `landing_page` and `thankyou_page` now mirror the v1.6.0 welcome-email pattern: `data` (POST) keeps all six fields for correct create-time publishing; `update_data` (PATCH) sends only `name`, `htmlTitle`, `templatePath`. `slug`, `domain`, and `state` are treated as identity-level and can only be changed via `terraform taint` + recreation or the HubSpot UI — not via a silent in-place PATCH.
+
+### Migration
+
+Re-pin `?ref=v1.6.1` → `?ref=v1.6.2` and run `npm run tf:init -- -upgrade && npm run tf:plan`. For a project on v1.6.1 with a partial apply:
+
+- `capture_form` and `survey_form`: CREATE (neither landed under v1.6.1 because both errored out)
+- `landing_page`: in-place UPDATE — the new `update_data` is a strict subset of what it sent before, so the `PAGE_EXISTS` error clears without URL collision
+- `thankyou_page`: no-op or small UPDATE
+- `welcome_email`: no-op on the editable fields already reconciled under v1.6.1
+
+**Stuck pre-v1.6.0 welcome emails.** Emails created by framework ≤ v1.5.0 have `type = "BATCH_EMAIL"` / `state = "DRAFT"` / `isPublished = false`. v1.6.0+ deliberately omits those fields from the PATCH payload (HubSpot's `/marketing/v3/emails/{id}` PATCH rejects transitions on them). Running `terraform plan` against such an email shows editable-field updates but no state transition. To promote the email to the current shape:
+
+```bash
+# From the project root
+bash scripts/tf.sh taint module.landing_page.restapi_object.welcome_email
+npm run tf:plan    # confirms a CREATE action on the email resource
+npm run setup      # recreates with AUTOMATED_EMAIL / AUTOMATED / isPublished=true
+```
+
+`taint` marks the resource for destroy+recreate on the next apply. The resulting email has the correct `type` / `state` / `subcategory` / `isPublished` and matches what a fresh v1.6.0+ apply would produce. A workflow that was attached to the old email ID in HubSpot must be re-attached to the new email ID — workflow binding is manual and not managed by Terraform.
+
 ## v1.6.1 (2026-04-23)
 
 Patch — bumps the `Mastercard/restapi` provider constraint from `~> 1.19` to `~> 2.0` across all three files that declare it (`scaffold/terraform/main.tf`, `terraform/modules/landing-page/main.tf`, `terraform/modules/account-setup/main.tf`). No module contract changes; no script changes.

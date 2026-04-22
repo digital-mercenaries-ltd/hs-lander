@@ -96,6 +96,17 @@ Both modules use the Mastercard/restapi provider (~1.19) and inherit the provide
 
 Without this, the rendered form shows a pre-filled "Project Source" text field to visitors.
 
+**Stuck pre-v1.6.0 welcome emails.** Emails created by framework ≤ v1.5.0 have `type = "BATCH_EMAIL"` / `state = "DRAFT"` / `isPublished = false`. From v1.6.0 the PATCH payload deliberately omits those fields — HubSpot's `/marketing/v3/emails/{id}` PATCH rejects transitions on them with `Cannot schedule or publish an email via the update API. Use the publish API instead.` `terraform plan` against such an email shows editable-field updates but no state transition. To promote the email to the current shape:
+
+```bash
+# From the project root
+bash scripts/tf.sh taint module.landing_page.restapi_object.welcome_email
+npm run tf:plan    # confirms a CREATE action on the email resource
+npm run setup      # recreates with AUTOMATED_EMAIL / AUTOMATED / isPublished=true
+```
+
+`taint` marks the resource for destroy+recreate on the next apply. The resulting email has the correct `type` / `state` / `subcategory` / `isPublished` and matches what a fresh v1.6.0+ apply would produce. A workflow that was attached to the old email ID in HubSpot must be re-attached to the new email ID — workflow binding is manual and not managed by Terraform.
+
 ## Hosting modes
 
 The framework is pure plumbing — it sends whatever `DOMAIN` and `LANDING_SLUG` the project profile supplies. Four hosting modes are supported by setting those two variables appropriately; the Terraform code path is identical across all four.
