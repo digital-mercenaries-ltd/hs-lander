@@ -3,8 +3,7 @@
 # Reads values from project.config.sh in the project root.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
 # Source config
 # shellcheck source=/dev/null

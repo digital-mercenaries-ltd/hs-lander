@@ -39,6 +39,12 @@ v1.0.0 framework built (Session 2 of the orchestration plan complete). All scrip
 bash tests/test-build.sh
 bash tests/test-post-apply.sh
 bash tests/test-terraform-plan.sh
+bash tests/test-preflight.sh
+bash tests/test-accounts-list.sh
+bash tests/test-accounts-describe.sh
+bash tests/test-projects-list.sh
+bash tests/test-init-project-pointer.sh
+bash tests/test-scaffold-project.sh
 
 # Run deployment test against a live project (requires HubSpot creds + a deployed project directory)
 # bash tests/test-deployment.sh /path/to/project
@@ -81,7 +87,12 @@ hs-lander/
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
 │   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering config, credential, API, scopes, DNS
 │   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
-│   └── hs-curl.sh           ← Keychain → curl HubSpot API
+│   ├── hs-curl.sh           ← Keychain → curl HubSpot API
+│   ├── accounts-list.sh         ← ACCOUNTS=<csv> of configured accounts (pre-scaffold)
+│   ├── accounts-describe.sh     ← ACCOUNT_* fields for a given account (pre-scaffold)
+│   ├── projects-list.sh         ← PROJECTS=<csv> under an account (pre-scaffold)
+│   ├── init-project-pointer.sh  ← Idempotently write project.config.sh sourcing chain (pre-scaffold)
+│   └── scaffold-project.sh      ← Copy scripts + scaffold, stub project profile, write pointer (pre-scaffold)
 ├── scaffold/                ← Template for new projects
 │   ├── project.config.example.sh
 │   ├── brief-template.md
@@ -90,11 +101,16 @@ hs-lander/
 │   └── terraform/main.tf   ← Calls modules by git URL
 ├── tests/
 │   ├── fixtures/
-│   ├── test-build.sh        ← Local, no network
-│   ├── test-post-apply.sh   ← Local, no network
-│   ├── test-terraform-plan.sh ← Local, parses plan output
-│   ├── test-preflight.sh    ← Local, mocks security/curl/dig
-│   └── test-deployment.sh   ← Network required, live HubSpot
+│   ├── test-build.sh             ← Local, no network
+│   ├── test-post-apply.sh        ← Local, no network
+│   ├── test-terraform-plan.sh    ← Local, parses plan output
+│   ├── test-preflight.sh         ← Local, mocks security/curl/dig
+│   ├── test-accounts-list.sh     ← Local, sandboxed HS_LANDER_CONFIG_DIR
+│   ├── test-accounts-describe.sh ← Local, sandboxed; verifies security is never invoked
+│   ├── test-projects-list.sh     ← Local, sandboxed
+│   ├── test-init-project-pointer.sh ← Local, sandboxed HS_LANDER_PROJECT_DIR
+│   ├── test-scaffold-project.sh  ← Local, end-to-end pre-scaffold flow
+│   └── test-deployment.sh        ← Network required, live HubSpot
 └── .github/workflows/
     └── ci.yml               ← Lint + build test + plan test (every push)
 ```
@@ -106,6 +122,18 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 **Terraform modules** create HubSpot resources (forms, pages, email, lists). The `account-setup` module runs once per account; `landing-page` runs per project. Both inherit the `restapi` provider from the consuming project's root `main.tf` — they never take `hubspot_token` as a variable.
 
 **Scripts** are generic and config-driven. They source `project.config.sh`, which is a thin sourcing-chain pointer into `~/.config/hs-lander/<account>/config.sh` (shared account settings + credential references) and `~/.config/hs-lander/<account>/<project>.sh` (per-landing-page settings). Keychain service names are explicit — `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` in the account config — never derived. Scripts live in this framework repo and are copied into per-project repos at scaffold time.
+
+**Project directory resolution:** scripts use `PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"` — invoke from the project directory, or export the env var. Scripts no longer derive `PROJECT_DIR` from their own location, so the framework install directory and the consuming project directory can differ.
+
+**Pre-scaffold commands** (run directly from the framework install, before a project has scaffolded scripts of its own):
+
+- `accounts-list.sh` → `ACCOUNTS=<csv>` of configured accounts (or empty, exit 0)
+- `accounts-describe.sh <account>` → four `ACCOUNT_*` fields, or `ACCOUNT_STATUS=missing <path>` and exit 1
+- `projects-list.sh <account>` → `PROJECTS=<csv>` under that account (exit 1 if account missing)
+- `init-project-pointer.sh <account> <project>` → `INIT_POINTER=created|present|conflict <path>`, exit 1 on conflict
+- `scaffold-project.sh <account> <project>` → copies scripts + scaffold/*, creates project profile stub under `~/.config/hs-lander/<account>/<project>.sh`, writes pointer. Emits multi-line `SCAFFOLD_*` contract ending with `SCAFFOLD=ok`. No-clobber; fails with `SCAFFOLD=error collision <path>` rather than overwriting.
+
+All pre-scaffold commands respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and `HS_LANDER_PROJECT_DIR` (default `$PWD`) for testability.
 
 **Scaffold** is the template for new projects. A project's `terraform/main.tf` references these modules by git URL with a pinned version tag.
 

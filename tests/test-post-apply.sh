@@ -76,7 +76,9 @@ chmod +x "$TMPDIR/mock-bin/terraform"
 
 # --- Run post-apply with mock terraform + overridden HOME ---
 echo "Running post-apply.sh..."
-HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/project/scripts/post-apply.sh"
+HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" \
+  HS_LANDER_PROJECT_DIR="$TMPDIR/project" \
+  bash "$TMPDIR/project/scripts/post-apply.sh"
 
 # --- Assertions ---
 
@@ -102,7 +104,9 @@ assert_equal "$pointer_after" "$pointer_before" "sourcing-chain pointer unchange
 
 echo ""
 echo "--- Idempotent (running twice gives same result) ---"
-HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" bash "$TMPDIR/project/scripts/post-apply.sh"
+HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" \
+  HS_LANDER_PROJECT_DIR="$TMPDIR/project" \
+  bash "$TMPDIR/project/scripts/post-apply.sh"
 assert_file_contains "$PROJECT_FILE" 'CAPTURE_FORM_ID="mock-form-id-abc123"' "CAPTURE_FORM_ID same after re-run"
 assert_file_contains "$PROJECT_FILE" 'LIST_ID="mock-list-id-789"' "LIST_ID same after re-run"
 

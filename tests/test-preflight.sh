@@ -227,8 +227,12 @@ run_preflight_capture() {
   # $1: env dir, $2: output log path. Returns preflight's exit code via echo-trick.
   # Caller can set any MOCK_CURL_* env var before calling to control the
   # mock curl's per-endpoint response, scopes body, or simulated exit failure.
+  # Explicit HS_LANDER_PROJECT_DIR override: preflight is invoked by absolute
+  # path (simulating the framework-install / consuming-project split), so $PWD
+  # is the test runner's CWD, not the project dir.
   local dir="$1" log="$2"
   HOME="$dir/home" PATH="$dir/mock-bin:$PATH" \
+    HS_LANDER_PROJECT_DIR="$dir/project" \
     MOCK_CURL_ACCOUNT_INFO_CODE="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" \
     MOCK_CURL_PROJECT_SOURCE_CODE="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" \
     MOCK_CURL_SCOPES_CODE="${MOCK_CURL_SCOPES_CODE:-200}" \
@@ -271,6 +275,7 @@ run_preflight_sanitised() {
   local dir="$1" log="$2"
   _build_sysbin "$dir"
   HOME="$dir/home" PATH="$dir/mock-bin:$dir/sysbin" \
+    HS_LANDER_PROJECT_DIR="$dir/project" \
     MOCK_CURL_ACCOUNT_INFO_CODE="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" \
     MOCK_CURL_PROJECT_SOURCE_CODE="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" \
     MOCK_CURL_SCOPES_CODE="${MOCK_CURL_SCOPES_CODE:-200}" \
@@ -734,7 +739,64 @@ expected_order=$'PREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 
+# --- Scenario S: $PWD-based PROJECT_DIR (script invoked by absolute path) ---
+# Regression guard for the 2026-04-22 fix. Previously preflight derived
+# PROJECT_DIR from its own script location, so invoking it by absolute path
+# from a caller's project directory looked for project.config.sh in the
+# framework install. The fix makes PROJECT_DIR = ${HS_LANDER_PROJECT_DIR:-$PWD}.
+# This scenario:
+#   - unsets HS_LANDER_PROJECT_DIR (run_preflight_capture sets it — don't use it)
+#   - cd's to the project dir
+#   - invokes preflight via its absolute path from inside the project dir
+# and asserts the pointer resolves correctly.
+
+echo ""
+echo "--- Scenario S: PROJECT_DIR defaults to \$PWD ---"
+TMPS=$(setup_env)
+write_account_config "$TMPS"
+write_project_config "$TMPS"
+write_project_sourcing_chain "$TMPS"
+write_mock_bin "$TMPS"
+LOGS="$TMPS/preflight.log"
+(
+  cd "$TMPS/project"
+  HOME="$TMPS/home" PATH="$TMPS/mock-bin:$PATH" \
+    MOCK_CURL_ACCOUNT_INFO_CODE=200 MOCK_CURL_PROJECT_SOURCE_CODE=200 \
+    MOCK_CURL_SCOPES_CODE=200 \
+    bash "$TMPS/project/scripts/preflight.sh" >"$LOGS" 2>&1
+) || exitS=$?
+: "${exitS:=0}"
+assert_equal "$exitS" "0" "exit 0 when preflight invoked by absolute path from project CWD"
+assert_file_contains "$LOGS" "^PREFLIGHT_PROJECT_POINTER=ok" "pointer resolves via \$PWD when invoked by absolute path"
+
+# --- Scenario T: HS_LANDER_PROJECT_DIR env var overrides $PWD ---
+# Runs preflight from a CWD with NO project.config.sh, but passes
+# HS_LANDER_PROJECT_DIR pointing at the real project dir. The env var should
+# take precedence over $PWD.
+
+echo ""
+echo "--- Scenario T: HS_LANDER_PROJECT_DIR overrides \$PWD ---"
+TMPT=$(setup_env)
+write_account_config "$TMPT"
+write_project_config "$TMPT"
+write_project_sourcing_chain "$TMPT"
+write_mock_bin "$TMPT"
+LOGT="$TMPT/preflight.log"
+ALIEN_CWD=$(mktemp -d)
+(
+  cd "$ALIEN_CWD"
+  HOME="$TMPT/home" PATH="$TMPT/mock-bin:$PATH" \
+    HS_LANDER_PROJECT_DIR="$TMPT/project" \
+    MOCK_CURL_ACCOUNT_INFO_CODE=200 MOCK_CURL_PROJECT_SOURCE_CODE=200 \
+    MOCK_CURL_SCOPES_CODE=200 \
+    bash "$TMPT/project/scripts/preflight.sh" >"$LOGT" 2>&1
+) || exitT=$?
+: "${exitT:=0}"
+rm -rf "$ALIEN_CWD"
+assert_equal "$exitT" "0" "exit 0 when HS_LANDER_PROJECT_DIR points at the project dir"
+assert_file_contains "$LOGT" "^PREFLIGHT_PROJECT_POINTER=ok" "pointer resolves via env-var override even when \$PWD has no project.config.sh"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}"' EXIT
 
 test_summary

@@ -104,6 +104,24 @@ Future service references (GA4 service account, Cloudflare API token, etc.) foll
 
 > **Removed in the config-hierarchy refactor:** the optional `scripts/hs.sh` PAK wrapper for the HubSpot CLI. Everything the framework needs runs via Service Key + REST (`scripts/upload.sh`, `scripts/tf.sh`, `scripts/hs-curl.sh`). Adopters who previously relied on `hs.sh` for manual CLI use can either use `hs-curl.sh` for API calls or install the HubSpot CLI themselves outside this framework.
 
+## Pre-scaffold commands
+
+These scripts run directly from the framework install, before a project has scaffolded scripts of its own. They give the skill (or a human operator) a structured surface for discovery and scaffolding, so the workflow is "call named command, parse output" rather than ad-hoc shell.
+
+All of them respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and, where relevant, `HS_LANDER_PROJECT_DIR` (default `$PWD`) for scripting and testing.
+
+| Script | Output | Exit |
+|---|---|---|
+| `scripts/accounts-list.sh` | `ACCOUNTS=<csv>` (empty when none) | 0 always |
+| `scripts/accounts-describe.sh <account>` | `ACCOUNT_PORTAL_ID=…`, `ACCOUNT_REGION=…`, `ACCOUNT_DOMAIN_PATTERN=…`, `ACCOUNT_TOKEN_KEYCHAIN_SERVICE=…`; or `ACCOUNT_STATUS=missing <path>` | 0 on ok, 1 on missing/args |
+| `scripts/projects-list.sh <account>` | `PROJECTS=<csv>`; or `ACCOUNT_STATUS=missing <path>` | 0 if account exists, 1 if missing |
+| `scripts/init-project-pointer.sh <account> <project>` | `INIT_POINTER=created\|present\|conflict <path>` | 0 on created/present, 1 on conflict/args |
+| `scripts/scaffold-project.sh <account> <project>` | Multi-line: `SCAFFOLD_SCRIPTS=`, `SCAFFOLD_TEMPLATE=`, `SCAFFOLD_PROJECT_PROFILE=`, `SCAFFOLD_POINTER=`, terminator `SCAFFOLD=ok`. Errors: `SCAFFOLD=error <reason>` | 0 on ok, 1 on any error |
+
+**Credential safety:** `accounts-describe.sh` never invokes `security` — it prints the Keychain service name but not the token.
+
+**No-clobber:** `init-project-pointer.sh` refuses to overwrite a pointer whose values differ from the requested account/project; `scaffold-project.sh` refuses to overwrite any file it would copy. Both fail loudly so the skill can surface a decision to the user rather than silently changing state.
+
 ## Preflight output reference
 
 `npm run preflight` (or `bash scripts/preflight.sh`) emits one line per check in the form `PREFLIGHT_<NAME>=<state> [detail]`. Exit 0 when every required check is ok or warn; exit 1 when any required check is missing, empty, unauthorized, forbidden, unreachable, or error. Warnings and the `PROJECT_SOURCE=missing` "first project on account" signal are non-blocking.

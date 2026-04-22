@@ -68,3 +68,23 @@ jobs:
 
       - name: Run test-preflight.sh
         run: bash tests/test-preflight.sh
+
+  prescaffold-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run test-accounts-list.sh
+        run: bash tests/test-accounts-list.sh
+
+      - name: Run test-accounts-describe.sh
+        run: bash tests/test-accounts-describe.sh
+
+      - name: Run test-projects-list.sh
+        run: bash tests/test-projects-list.sh
+
+      - name: Run test-init-project-pointer.sh
+        run: bash tests/test-init-project-pointer.sh
+
+      - name: Run test-scaffold-project.sh
+        run: bash tests/test-scaffold-project.sh
