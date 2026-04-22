@@ -86,4 +86,33 @@ TMP6=$(mktemp -d)
 HS_LANDER_CONFIG_DIR="$TMP6" bash "$SCRIPT" dml 1 eu1 >"$TMP6/log" 2>&1 && exit6=0 || exit6=$?
 assert_equal "$exit6" "1" "exit 1 when arg count wrong"
 
+# --- Scenario 7: banned characters in field values are rejected ---
+# Prevents writing values that won't round-trip through source (injected
+# command substitution, broken canonical quoting, etc.).
+echo ""
+echo "--- Scenario 7: banned chars rejected ---"
+TMP7=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}"' EXIT
+
+# Banned char in domain_pattern (double-quote)
+HS_LANDER_CONFIG_DIR="$TMP7" bash "$SCRIPT" dml 1 eu1 'has"quote' svc >"$TMP7/log-quote" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on double-quote in domain_pattern"
+assert_file_contains "$TMP7/log-quote" "^ACCOUNTS_INIT=error invalid-value" "invalid-value reported for quote"
+
+# Banned char in token-service (dollar)
+HS_LANDER_CONFIG_DIR="$TMP7" bash "$SCRIPT" dml 1 eu1 "" 'svc$injected' >"$TMP7/log-dollar" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on dollar in token-service"
+
+# Banned char in portal-id (backtick)
+HS_LANDER_CONFIG_DIR="$TMP7" bash "$SCRIPT" dml 'bad`tick`' eu1 "" svc >"$TMP7/log-tick" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on backtick in portal-id"
+
+# File must not exist after any of the rejections (account-dir may be created
+# by a prior mkdir in a future refactor — check just that the config.sh is absent)
+if [[ -f "$TMP7/dml/config.sh" ]]; then
+  assert_equal "present" "must-NOT-exist" "no config.sh created after rejection"
+else
+  assert_equal "1" "1" "no config.sh written on banned-char rejection"
+fi
+
 test_summary

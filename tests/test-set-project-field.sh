@@ -151,4 +151,66 @@ assert_file_contains "$TMP8/dml/heard.sh" '^DOMAIN="some host \*\.example\.com"$
 ) && rt=ok || rt=fail
 assert_equal "$rt" "ok" "sourced value matches what we set (glob not expanded)"
 
+# --- Scenario 9: pipe | in value is handled (not confused with sed delimiter) ---
+# Regression guard for the sed-delimiter bug: `|` is now escaped in the
+# replacement string rather than terminating the substitution.
+echo ""
+echo "--- Scenario 9: pipe in value round-trips ---"
+TMP9=$(mktemp -d)
+seed_profile "$TMP9"
+exit9=$(HS_LANDER_CONFIG_DIR="$TMP9" bash "$SCRIPT" dml heard DOMAIN="a|b|c" >"$TMP9/log" 2>&1; echo $?)
+assert_equal "$exit9" "0" "exit 0 with pipe in value"
+assert_file_contains "$TMP9/dml/heard.sh" '^DOMAIN="a|b|c"$' "pipe written literally"
+(
+  # shellcheck source=/dev/null
+  source "$TMP9/dml/heard.sh"
+  [[ "$DOMAIN" == "a|b|c" ]] || exit 10
+) && rt=ok || rt=fail
+assert_equal "$rt" "ok" "pipe value round-trips via source"
+
+# --- Scenario 10: value with banned chars is rejected — no file write ---
+# Any of: double-quote, dollar, backtick, backslash, or control char.
+# These can't round-trip through canonical `KEY="value"` quoting.
+echo ""
+echo "--- Scenario 10: banned chars rejected ---"
+TMP10=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}"' EXIT
+seed_profile "$TMP10"
+before=$(cat "$TMP10/dml/heard.sh")
+
+# Double-quote
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" dml heard 'DOMAIN=has"quote' >"$TMP10/log-quote" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on double-quote in value"
+assert_file_contains "$TMP10/log-quote" "^SET_FIELD=error invalid-value DOMAIN" "invalid-value reported for quote"
+
+# Dollar (command/var expansion risk on source)
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" dml heard 'DOMAIN=has$dollar' >"$TMP10/log-dollar" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on dollar in value"
+
+# Backtick (command substitution risk on source)
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" dml heard 'DOMAIN=has`tick`' >"$TMP10/log-tick" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on backtick in value"
+
+# Backslash
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" dml heard 'DOMAIN=has\backslash' >"$TMP10/log-bs" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on backslash in value"
+
+# Newline (via $'...')
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" dml heard "DOMAIN=$(printf 'a\nb')" >"$TMP10/log-nl" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on newline in value"
+
+# File must be byte-identical after every rejection
+after=$(cat "$TMP10/dml/heard.sh")
+assert_equal "$after" "$before" "file unchanged across all banned-char rejections"
+
+# --- Scenario 11: no stale .tmp.* files left behind after a successful run ---
+echo ""
+echo "--- Scenario 11: successful run leaves no stale temp ---"
+TMP11=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}"' EXIT
+seed_profile "$TMP11"
+HS_LANDER_CONFIG_DIR="$TMP11" bash "$SCRIPT" dml heard DOMAIN=clean.example.com >/dev/null
+stale=$(find "$TMP11/dml" -maxdepth 1 -name 'heard.sh.tmp.*' | wc -l | tr -d ' ')
+assert_equal "$stale" "0" "no stale .tmp.* files in account dir after success"
+
 test_summary

@@ -47,6 +47,21 @@ if [[ -z "$token_service" ]]; then
   exit 1
 fi
 
+# Reject characters that can't round-trip through canonical `KEY="value"`
+# quoting. None of the account-config fields have any legitimate use for
+# double-quote, dollar, backtick, backslash, or control chars.
+_has_banned_char() {
+  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *'\'* ]] && return 0
+  [[ "$1" != "$(printf '%s' "$1" | tr -d '[:cntrl:]')" ]] && return 0
+  return 1
+}
+for field_name in portal_id domain_pattern token_service; do
+  if _has_banned_char "${!field_name}"; then
+    echo "ACCOUNTS_INIT=error invalid-value $field_name (contains disallowed character)"
+    exit 1
+  fi
+done
+
 accounts_dir="${HS_LANDER_CONFIG_DIR:-$HOME/.config/hs-lander}"
 account_dir="$accounts_dir/$account"
 config_path="$account_dir/config.sh"
@@ -58,8 +73,10 @@ fi
 
 mkdir -p "$account_dir"
 # Write to a temp and mv for atomicity — an interrupted write shouldn't
-# leave a partial config.sh that later scripts would source.
+# leave a partial config.sh that later scripts would source. EXIT trap
+# cleans up the temp if we crash before the mv.
 tmp_path="$config_path.tmp.$$"
+trap 'rm -f "$tmp_path"' EXIT
 cat > "$tmp_path" <<EOF
 HUBSPOT_PORTAL_ID="$portal_id"
 HUBSPOT_REGION="$region"
@@ -67,5 +84,6 @@ DOMAIN_PATTERN="$domain_pattern"
 HUBSPOT_TOKEN_KEYCHAIN_SERVICE="$token_service"
 EOF
 mv "$tmp_path" "$config_path"
+trap - EXIT
 
 echo "ACCOUNTS_INIT=created $config_path"

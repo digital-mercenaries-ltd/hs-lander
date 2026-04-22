@@ -61,6 +61,21 @@ if [[ ! -f "$profile" ]]; then
   exit 1
 fi
 
+# Reject values that can't round-trip through canonical `KEY="value"` quoting
+# or that would break the sed substitution used for in-place rewrites.
+# These characters have no legitimate use in the allow-listed project-profile
+# fields (domains, paths, ids, GA4 measurement IDs). Rejecting up-front is
+# simpler and safer than trying to escape them correctly through two layers
+# (sed replacement AND double-quoted shell syntax).
+#
+# Banned: " $ ` \ and any control char (newline, tab, etc.).
+_has_banned_char() {
+  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *'\'* ]] && return 0
+  # Any control char (0x00-0x1F, 0x7F): use tr + -n to test for non-printable.
+  [[ "$1" != "$(printf '%s' "$1" | tr -d '[:cntrl:]')" ]] && return 0
+  return 1
+}
+
 # Validate every pair up front. No partial writes — if one pair is bad,
 # no file is touched.
 keys=()
@@ -80,22 +95,32 @@ for arg in "$@"; do
     echo "SET_FIELD=error unknown-key $k"
     exit 1
   fi
+  if _has_banned_char "$v"; then
+    # Don't echo the raw value — it may contain terminal control codes.
+    echo "SET_FIELD=error invalid-value $k (contains disallowed character: double-quote, dollar, backtick, backslash, or control char)"
+    exit 1
+  fi
   keys+=("$k")
   values+=("$v")
 done
 
-# Apply all pairs to an in-memory copy, then atomic-replace on disk.
+# Apply all pairs to an in-memory copy, then atomic-replace on disk. EXIT
+# trap cleans up the temp files even if the script is killed or sed fails
+# mid-loop — otherwise stale *.tmp.* files accumulate in the config dir.
 tmp_path="$profile.tmp.$$"
+trap 'rm -f "$tmp_path" "$tmp_path.edit"' EXIT
 cp "$profile" "$tmp_path"
 
 actions=()
 for i in "${!keys[@]}"; do
   k="${keys[$i]}"
   v="${values[$i]}"
-  # Match any existing assignment (quoted or unquoted, optional `export `),
-  # replace with canonical KEY="value". Escape sed metacharacters in the
-  # value so shell/regex metacharacters round-trip safely.
-  v_escaped=$(printf '%s' "$v" | sed -e 's/[\\/&]/\\&/g')
+  # Match any existing assignment (quoted or unquoted, optional `export `)
+  # and replace with canonical KEY="value". We use `|` as the sed delimiter,
+  # so escape `\`, `|`, and `&` (the whole-match metachar) in the value.
+  # The other "scary" shell metachars (" $ ` \ newline) are rejected up-front
+  # by _has_banned_char, so we don't need to escape them here.
+  v_escaped=$(printf '%s' "$v" | sed -e 's/[\\|&]/\\&/g')
   if grep -qE "^[[:space:]]*(export[[:space:]]+)?$k=" "$tmp_path"; then
     # In-place edit on the temp copy. `sed -i` differs between BSD/GNU
     # so we use the portable `sed ... > new && mv` dance.
@@ -109,6 +134,7 @@ for i in "${!keys[@]}"; do
 done
 
 mv "$tmp_path" "$profile"
+trap - EXIT
 
 printf '%s\n' "${actions[@]}"
 echo "SET_FIELD=ok"
