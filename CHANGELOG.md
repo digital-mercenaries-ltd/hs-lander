@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.6.0 (2026-04-22)
+
+Minor bump — no breaking change to the module contract, but all three `landing-page` resources whose apply failed against Heard portal 147959629 under v1.5.0 are reworked. Projects already on v1.5.0 with successful applies will see `welcome_email` and `contact_list` as in-place updates; `capture_form` and `survey_form` will be updated in place as well. No new required inputs; re-pin `?ref=v1.6.0` and re-run `tf:init -upgrade && tf:plan`.
+
+### Fixed
+
+- **Welcome email PATCH rejected by HubSpot.** `/marketing/v3/emails/{id}` PATCH with `state = "AUTOMATED"` and `isPublished = true` returns `Cannot schedule or publish an email via the update API. Use the publish API instead.` — HubSpot forbids toggling state/publish status on update. The email resource now declares a separate `update_data` payload that omits `state`, `isPublished`, `type`, `subcategory`, and `emailTemplateMode`; `data` (POST) keeps them so creation still publishes the email. Subsequent applies only PATCH the editable fields (name, subject, language, `from`, `subscriptionDetails`, `content`, `to`).
+- **Forms API v3 dropped `fieldType = "hidden"`.** Create-time error: `Could not resolve type id 'hidden' as a subtype of FieldBase; known type ids = [datepicker, dropdown, email, file, mobile_phone, multi_line_text, multiple_checkboxes, number, payment_link_radio, phone, radio, single_checkbox, single_line_text]`. The `project_source` segmentation field on both `capture_form` and `survey_form` now uses `fieldType = "single_line_text"` with `defaultValue = var.project_slug`. The field is rendered by the HubSpot embed; scaffolded `src/css/main.css` must hide `input[name="project_source"]` and `.hs_project_source` (see `docs/framework.md` → project_source segmentation field).
+- **Lists API wraps response in `{"list": {...}}`.** Terraform's Mastercard/restapi provider threw `internal validation failed; object ID is not set` on create because it looked for `listId` at the response root rather than under `.list`. The provider's `id_attribute` supports slash-delimited paths (confirmed in `internal/apiclient/utils.go: GetObjectAtKey`), so the list resource now sets `id_attribute = "list/listId"`. Drift detection on reads is suppressed (`ignore_all_server_changes = true`) because the wrapped GET response would otherwise falsely flag every field as drifted against the flat `data` payload.
+
+### Changed
+
+- `scaffold/terraform/main.tf` refs bumped to `v1.6.0`.
+- `docs/framework.md` gains a callout documenting the `project_source` CSS hide requirement for scaffolded projects.
+
+### Migration
+
+For projects on v1.5.0 with a clean apply: bump `?ref=v1.5.0` → `?ref=v1.6.0` in `terraform/main.tf`, `npm run tf:init -- -upgrade && npm run tf:plan`, then `npm run setup`.
+
+For projects on v1.5.0 with a **partial apply that left orphan resources on the portal** (e.g. Heard: list created but missing from state): delete the orphan list on the portal first (e.g. `bash scripts/hs-curl.sh DELETE /crm/v3/lists/<listId>`), then re-apply. Without cleanup, the next apply will create a duplicate list.
+
+Add to scaffolded `src/css/main.css`:
+
+```css
+.hs-form input[name="project_source"],
+.hs-form .hs_project_source { display: none !important; }
+```
+
 ## v1.5.0 (2026-04-22) — BREAKING
 
 Minor bump — breaking change to both the module contract and the marketing email payload. The `landing-page` module takes three new required inputs (`hubspot_subscription_id`, `hubspot_office_location_id`, `email_body_html`); the previous `email_body_path` input is removed. All projects re-pinning their `source` ref must be rewired (see Migration below).

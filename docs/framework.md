@@ -87,6 +87,15 @@ Both modules use the Mastercard/restapi provider (~1.19) and inherit the provide
 
 **Sender verification (prerequisite):** the `email_reply_to` address must be a verified sender on the HubSpot portal. HubSpot will accept resource creation with an unverified address but the welcome email workflow will not deliver when triggered. Verify the address in HubSpot UI: Marketing → Email → Settings → From Address before relying on send.
 
+**project_source segmentation field (scaffold CSS requirement):** every form includes a `project_source` field (single_line_text with defaultValue = project slug) so contact-list filtering by project works. HubSpot Forms API v3 dropped the `hidden` fieldType, so this field renders as a visible text input unless hidden by scaffolded CSS. Scaffolded `src/css/main.css` must include:
+
+```css
+.hs-form input[name="project_source"],
+.hs-form .hs_project_source { display: none !important; }
+```
+
+Without this, the rendered form shows a pre-filled "Project Source" text field to visitors.
+
 ## Hosting modes
 
 The framework is pure plumbing — it sends whatever `DOMAIN` and `LANDING_SLUG` the project profile supplies. Four hosting modes are supported by setting those two variables appropriately; the Terraform code path is identical across all four.

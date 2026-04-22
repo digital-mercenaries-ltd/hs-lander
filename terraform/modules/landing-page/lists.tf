@@ -1,5 +1,5 @@
 # terraform/modules/landing-page/lists.tf
-
+#
 # Dependency anchor: the contact list filters on the project_source CRM
 # property, which is created by the account-setup module. Terraform cannot
 # infer that ordering from the list's payload alone (the property is
@@ -11,10 +11,28 @@ resource "terraform_data" "project_source_dependency" {
   input = var.project_source_property_id
 }
 
+# HubSpot Lists API v3 response-wrapping quirk:
+# POST /crm/v3/lists returns `{"list": {"listId": ..., ...}}` — the actual
+# list payload is nested under a `list` key rather than being at the
+# response root. The Mastercard/restapi provider supports slash-delimited
+# paths in `id_attribute`, so `id_attribute = "list/listId"` correctly
+# extracts the ID via internal.apiclient.GetObjectAtKey(response,
+# "list/listId"). Without the nested path the provider raises "internal
+# validation failed; object ID is not set" and reports "object *may* have
+# been created" — leaving an orphan list on the portal.
+#
+# Drift detection on subsequent reads is disabled via
+# `ignore_all_server_changes = true`: GET /crm/v3/lists/{id} returns the
+# same wrapped shape, so field-by-field comparison against the flat `data`
+# payload would falsely flag every field as drifted. The list has minimal
+# updateable state (filter changes typically require replacement anyway),
+# so suppressing drift detection is an acceptable trade-off for this
+# resource.
 resource "restapi_object" "contact_list" {
-  path          = "/crm/v3/lists"
-  id_attribute  = "listId"
-  update_method = "PATCH"
+  path                      = "/crm/v3/lists"
+  id_attribute              = "list/listId"
+  update_method             = "PATCH"
+  ignore_all_server_changes = true
 
   depends_on = [terraform_data.project_source_dependency]
 

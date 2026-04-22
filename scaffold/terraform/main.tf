@@ -57,11 +57,11 @@ variable "hubspot_office_location_id" {
 }
 
 module "account_setup" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.5.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.6.0"
 }
 
 module "landing_page" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.5.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.6.0"
 
   hubspot_portal_id          = var.hubspot_portal_id
   project_slug               = "PROJECT_SLUG"

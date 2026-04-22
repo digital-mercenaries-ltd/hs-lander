@@ -6,6 +6,13 @@
 # - Non-email fields must NOT have a validation key
 # - legalConsentOptions.type = "implicit_consent_to_process" (lowercase)
 # - Every field needs objectTypeId = "0-1"
+# - fieldType = "hidden" is NOT a supported subtype of FieldBase in v3.
+#   Supported subtypes: datepicker, dropdown, email, file, mobile_phone,
+#   multi_line_text, multiple_checkboxes, number, payment_link_radio, phone,
+#   radio, single_checkbox, single_line_text. For project_source
+#   segmentation we use single_line_text with a defaultValue and hide it in
+#   the rendered form via CSS (scaffolded main.css hides
+#   input[name="project_source"] and its wrapping field group).
 
 resource "restapi_object" "capture_form" {
   path          = "/marketing/v3/forms"
@@ -45,12 +52,14 @@ resource "restapi_object" "capture_form" {
             objectTypeId = "0-1"
             required     = field.required
           }],
-          # Hidden project_source field
+          # project_source segmentation field — hidden in the rendered form
+          # via CSS (see scaffold/src/css/main.css). Kept as
+          # single_line_text because Forms v3 rejects fieldType = "hidden".
           [
             {
               name         = "project_source"
               label        = "Project Source"
-              fieldType    = "hidden"
+              fieldType    = "single_line_text"
               objectTypeId = "0-1"
               defaultValue = var.project_slug
             }
