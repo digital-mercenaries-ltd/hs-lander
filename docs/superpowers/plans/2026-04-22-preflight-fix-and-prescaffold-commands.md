@@ -1,7 +1,7 @@
 # Plan: Fix preflight PROJECT_DIR + Add Pre-Scaffold Command Set
 
 **Date:** 2026-04-22
-**Status:** Pending
+**Status:** Implemented
 **Scope:** Framework. Two related changes that together make the framework consumable by the skill without shell improvisation.
 
 ## Context
