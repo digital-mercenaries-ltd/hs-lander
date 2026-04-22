@@ -71,6 +71,12 @@ variable "survey_fields" {
   description = "Survey form field definitions"
 }
 
+variable "privacy_text" {
+  type        = string
+  default     = "We'll use the information you provide to send you occasional updates. You can unsubscribe at any time."
+  description = "Short privacy disclosure shown beneath form fields. Required by HubSpot Forms v3 when legalConsentOptions.type = implicit_consent_to_process."
+}
+
 variable "email_name" {
   type        = string
   description = "Welcome email name in HubSpot"
