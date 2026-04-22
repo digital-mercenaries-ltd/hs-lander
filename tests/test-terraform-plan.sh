@@ -39,14 +39,15 @@ echo "--- Expected resources in plan ---"
 # Count resources to add
 add_count=$(echo "$PLAN_TEXT" | grep -c "will be created" || true)
 
-# Minimum expected: project_source_property + capture_form + landing_page +
-# thankyou_page + welcome_email + contact_list = 6
-if [[ "$add_count" -ge 6 ]]; then
+# Minimum expected: project_source_property + capture_form + survey_form +
+# landing_page + thankyou_page + welcome_email + contact_list +
+# project_source_dependency (terraform_data anchor) = 8
+if [[ "$add_count" -ge 8 ]]; then
   result="true"
 else
   result="false"
 fi
-assert_equal "$result" "true" "at least 6 resources to create (got $add_count)"
+assert_equal "$result" "true" "at least 8 resources to create (got $add_count)"
 
 # Check specific resources by name
 assert_file_contains "$PLAN_TXT" "project_source_property" \
@@ -66,6 +67,28 @@ assert_file_contains "$PLAN_TXT" "welcome_email" \
 
 assert_file_contains "$PLAN_TXT" "contact_list" \
   "landing-page: contact list"
+
+echo ""
+echo "--- Forms API v3: formType required ---"
+# Both form payloads must carry formType = "hubspot" (Forms API v3 drift —
+# the field became required post-v1.0.0 and missing it fails apply with
+# "Some required fields were not set: [formType]").
+formtype_count=$(grep -c 'formType\s*=\s*"hubspot"' "$PLAN_TXT" || true)
+if [[ "$formtype_count" -ge 2 ]]; then
+  result="true"
+else
+  result="false"
+fi
+assert_equal "$result" "true" "both form payloads include formType=hubspot (got $formtype_count)"
+
+echo ""
+echo "--- Property→list dependency anchor ---"
+# The contact_list must depend on the project_source property. We route
+# that through a terraform_data resource inside the landing-page module
+# whose input is var.project_source_property_id, so the plan shows an
+# anchor resource being created.
+assert_file_contains "$PLAN_TXT" "project_source_dependency" \
+  "terraform_data dependency anchor for project_source present in plan"
 
 echo ""
 echo "--- No unexpected destroy actions ---"
