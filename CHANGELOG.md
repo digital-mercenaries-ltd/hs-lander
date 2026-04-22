@@ -1,6 +1,8 @@
 # Changelog
 
-## v1.3.1 (2026-04-22)
+## v1.4.0 (2026-04-22)
+
+Minor bump because the `landing-page` module takes a new required input (`project_source_property_id`). Any project re-pinning its `source` ref must also add this wiring or terraform init will reject the call.
 
 ### Fixed
 
@@ -13,11 +15,11 @@ Projects scaffolded against v1.0.0–v1.3.0 need a one-line addition plus a ref 
 
 ```hcl
 module "account_setup" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.3.1"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.4.0"
 }
 
 module "landing_page" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.3.1"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.4.0"
 
   # existing inputs ...
   project_source_property_id = module.account_setup.project_source_property_id

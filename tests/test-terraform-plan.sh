@@ -23,7 +23,8 @@ terraform -chdir="$HARNESS_DIR" init -backend=false -input=false >/dev/null 2>&1
 echo "Running terraform plan..."
 PLAN_FILE="$HARNESS_DIR/test.tfplan"
 PLAN_TXT="$HARNESS_DIR/plan.txt"
-trap 'rm -f "$PLAN_FILE" "$PLAN_TXT"' EXIT
+PLAN_JSON="$HARNESS_DIR/plan.json"
+trap 'rm -f "$PLAN_FILE" "$PLAN_TXT" "$PLAN_JSON"' EXIT
 
 terraform -chdir="$HARNESS_DIR" plan \
   -out="$PLAN_FILE" \
@@ -85,10 +86,38 @@ echo ""
 echo "--- Property→list dependency anchor ---"
 # The contact_list must depend on the project_source property. We route
 # that through a terraform_data resource inside the landing-page module
-# whose input is var.project_source_property_id, so the plan shows an
-# anchor resource being created.
+# whose input is var.project_source_property_id.
+#
+# Two invariants to verify — existence alone is not enough. A future
+# refactor could leave the anchor in place but drop the edge; that would
+# re-introduce the race condition silently.
+#
+# 1. The anchor resource exists in the plan.
+# 2. contact_list carries `depends_on = [terraform_data.project_source_dependency]`
+#    in its parsed configuration.
+
+terraform -chdir="$HARNESS_DIR" show -json "$PLAN_FILE" > "$PLAN_JSON"
+
 assert_file_contains "$PLAN_TXT" "project_source_dependency" \
   "terraform_data dependency anchor for project_source present in plan"
+
+# Pull the contact_list resource's depends_on from the module config and
+# confirm it names the anchor. Addresses inside module configuration are
+# module-local (no "module.landing_page." prefix).
+contact_list_deps=$(jq -r '
+  .configuration.root_module.module_calls.landing_page.module.resources[]
+  | select(.address == "restapi_object.contact_list")
+  | .depends_on // []
+  | join(",")
+' "$PLAN_JSON")
+
+if [[ ",$contact_list_deps," == *",terraform_data.project_source_dependency,"* ]]; then
+  result="true"
+else
+  result="false"
+fi
+assert_equal "$result" "true" \
+  "contact_list depends_on includes the project_source anchor (got: [$contact_list_deps])"
 
 echo ""
 echo "--- No unexpected destroy actions ---"
