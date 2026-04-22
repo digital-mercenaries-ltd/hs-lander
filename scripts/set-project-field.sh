@@ -70,7 +70,7 @@ fi
 #
 # Banned: " $ ` \ and any control char (newline, tab, etc.).
 _has_banned_char() {
-  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *'\'* ]] && return 0
+  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *"\\"* ]] && return 0
   # Any control char (0x00-0x1F, 0x7F): use tr + -n to test for non-printable.
   [[ "$1" != "$(printf '%s' "$1" | tr -d '[:cntrl:]')" ]] && return 0
   return 1

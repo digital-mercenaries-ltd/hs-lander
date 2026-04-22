@@ -51,7 +51,7 @@ fi
 # quoting. None of the account-config fields have any legitimate use for
 # double-quote, dollar, backtick, backslash, or control chars.
 _has_banned_char() {
-  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *'\'* ]] && return 0
+  [[ "$1" == *'"'* || "$1" == *'$'* || "$1" == *'`'* || "$1" == *"\\"* ]] && return 0
   [[ "$1" != "$(printf '%s' "$1" | tr -d '[:cntrl:]')" ]] && return 0
   return 1
 }
