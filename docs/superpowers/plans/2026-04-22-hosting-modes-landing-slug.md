@@ -140,6 +140,10 @@ Add `LANDING_SLUG` as an optional field (default `""`). Empty means "custom-doma
 
 `set-project-field.sh` needs to accept `LANDING_SLUG` and `THANKYOU_SLUG` as valid field keys (the script validates keys against a schema).
 
+**`HOSTING_MODE_HINT` is deliberately NOT in the framework's allow-list.** Earlier drafts of this plan (and PR #11) suggested adding it alongside `LANDING_SLUG`. Revised position: the hint exists purely for skill-side coaching, has no Terraform or framework-script consumer, and should not pollute the shared project profile schema. It lives in skill-local state at `~/.config/hs-lander/<account>/<project>.skillstate.sh`. See the skill plan `2026-04-22-skill-hosting-modes.md` for the skill-side state mechanism.
+
+**PR #11 action required before merge:** remove `HOSTING_MODE_HINT` from `scripts/set-project-field.sh` allow-list and from `scaffold/project.config.example.sh`. No other framework-side changes needed for the hint relocation.
+
 ## Changes to `docs/framework.md`
 
 New "Hosting modes" section with the table from the "Supported hosting modes" section above, explaining:
