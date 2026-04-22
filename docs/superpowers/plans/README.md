@@ -25,6 +25,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-22-v1.4.0-api-drift-fixes.md (partial — fixes 1 + 2) | Complete | v1.4.0 |
 | 2026-04-22-v1.6.0-heard-apply-drift-fixes.md | Complete (retroactive) | v1.6.0 |
 | 2026-04-22-v1.6.1-provider-version-bump.md | Complete | v1.6.1 |
+| 2026-04-23-v1.6.2-heard-apply-round-2.md | Complete | v1.6.2 |
 
 ### In-flight
 
