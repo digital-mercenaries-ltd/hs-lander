@@ -31,7 +31,24 @@ For projects scaffolded against earlier versions:
    HUBSPOT_OFFICE_LOCATION_ID="<from HubSpot UI: Settings → Marketing → Email → Office Locations>"
    ```
 
-2. In `terraform/main.tf`: bump both `source = "... ?ref=v1.4.0"` pins to `?ref=v1.5.0`; add the three new inputs to the `landing_page` module call:
+2. In `terraform/main.tf`, declare the four new top-level variables alongside the existing `hubspot_token` / `hubspot_portal_id` / `domain` / `hubspot_region` declarations:
+
+   ```hcl
+   variable "hubspot_subscription_id"    { type = string }
+   variable "hubspot_office_location_id" { type = string }
+   variable "landing_slug" {
+     type    = string
+     default = ""
+   }
+   variable "thankyou_slug" {
+     type    = string
+     default = "thank-you"
+   }
+   ```
+
+   The first two are required — `tf.sh` will export `TF_VAR_hubspot_subscription_id` / `TF_VAR_hubspot_office_location_id` from the account config, so `terraform plan` needs the variable declarations to receive them. The two slug variables have defaults matching custom-domain-primary hosting mode; non-default values are set per-project via `set-project-field.sh` (see step 4).
+
+3. In the same file, bump both `source = "... ?ref=v1.4.0"` pins to `?ref=v1.5.0` and update the `landing_page` module call:
 
    ```hcl
    module "landing_page" {
@@ -41,17 +58,21 @@ For projects scaffolded against earlier versions:
      hubspot_subscription_id    = var.hubspot_subscription_id
      hubspot_office_location_id = var.hubspot_office_location_id
      email_body_html            = file("${path.module}/../dist/emails/welcome-body.html")
+     landing_slug               = var.landing_slug
+     thankyou_slug              = var.thankyou_slug
      # remove: email_body_path = ...
    }
    ```
 
-   And declare the two new top-level variables (see `scaffold/terraform/main.tf` for the canonical form).
+   See `scaffold/terraform/main.tf` for the complete canonical form.
 
-3. Optionally, for hosting modes: set `LANDING_SLUG` and `HOSTING_MODE_HINT` in the project profile (`set-project-field.sh <account> <project> LANDING_SLUG=... HOSTING_MODE_HINT=...`).
+4. Optionally, for hosting modes: set `LANDING_SLUG` and `HOSTING_MODE_HINT` in the project profile (`set-project-field.sh <account> <project> LANDING_SLUG=... HOSTING_MODE_HINT=...`).
 
-4. `npm run tf:init -- -upgrade && npm run tf:plan`. For a project with a partial apply (e.g. Heard), expect `welcome_email` to show as an update (payload restructure). Inspect carefully: any `create` action for a resource that already exists in the portal needs `terraform import` first.
+5. `npm run tf:init -- -upgrade && npm run tf:plan`. For a project with a partial apply (e.g. Heard), expect `welcome_email` to show as an update (payload restructure). Inspect carefully: any `create` action for a resource that already exists in the portal needs `terraform import` first.
 
-5. **Sender verification:** the `email_reply_to` address must be verified as a sender on the portal before the welcome-email workflow will deliver. See `docs/framework.md` → Sender verification.
+6. **Sender verification:** the `email_reply_to` address must be verified as a sender on the portal before the welcome-email workflow will deliver. See `docs/framework.md` → Sender verification.
+
+7. **Workflow binding is manual.** Setting `state = "AUTOMATED"` on the email resource is not the same as attaching it to a workflow trigger. The framework creates a send-ready email; attaching it to a form-submission workflow is a HubSpot UI step (Automation → Workflows → New workflow → "Send marketing email"). This was manual under v1.4.0 too — noted here because the new `AUTOMATED_EMAIL` type reads as if it self-wires.
 
 ## v1.4.0 (2026-04-22)
 
