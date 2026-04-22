@@ -24,7 +24,7 @@ run() {
 echo ""
 echo "--- Scenario 1: happy path ---"
 TMP1=$(mktemp -d)
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}"' EXIT
 mkdir -p "$TMP1/cfg/dml" "$TMP1/proj"
 cat > "$TMP1/cfg/dml/config.sh" <<'EOF'
 HUBSPOT_PORTAL_ID="147959629"
@@ -81,5 +81,39 @@ assert_equal "$exit3" "1" "exit 1 on collision"
 assert_file_contains "$TMP3/log" "^SCAFFOLD=error collision" "collision reason reported"
 # Existing file preserved
 assert_equal "$(cat "$TMP3/proj/scripts/preflight.sh")" "pre-existing" "existing script untouched on collision"
+
+# --- Scenario 4: LATE collision (template-phase) — no partial copy leaks ---
+# Regression guard for the two-pass validation: put the collision on a
+# scaffold-template entry so the naive single-pass implementation would
+# have already copied scripts/ before hitting the error. With two-pass
+# validation, NO file should be copied and NO SCAFFOLD_* lines emitted.
+
+echo ""
+echo "--- Scenario 4: late collision → no partial copy ---"
+TMP4=$(mktemp -d)
+mkdir -p "$TMP4/cfg/dml" "$TMP4/proj"
+cat > "$TMP4/cfg/dml/config.sh" <<'EOF'
+HUBSPOT_PORTAL_ID="1"
+HUBSPOT_REGION="eu1"
+DOMAIN_PATTERN="*.e.com"
+HUBSPOT_TOKEN_KEYCHAIN_SERVICE="svc"
+EOF
+# Pre-create a scaffold-template target (package.json) to force a collision
+# AFTER the scripts/ phase has been validated. Do NOT pre-create anything
+# under scripts/ — we want the would-be script targets clear so a naive
+# single-pass impl would have copied them before erroring here.
+echo 'pre-existing-package-json' > "$TMP4/proj/package.json"
+exit4=$(run "$TMP4/proj" "$TMP4/cfg" dml heard "$TMP4/log" || true)
+assert_equal "$exit4" "1" "exit 1 on late collision"
+assert_file_contains "$TMP4/log" "^SCAFFOLD=error collision .*/package.json" "collision on template phase reported"
+# No scripts copied — the two-pass check must catch the template collision
+# BEFORE any copy happens, so scripts/ stays absent or empty.
+if [[ -f "$TMP4/proj/scripts/preflight.sh" ]]; then
+  assert_equal "copied" "must-NOT-have-been-copied" "no scripts should be copied before collision detected"
+else
+  assert_equal "1" "1" "two-pass validation prevented partial copy (scripts/ untouched)"
+fi
+# Existing package.json preserved
+assert_equal "$(cat "$TMP4/proj/package.json")" "pre-existing-package-json" "existing template file untouched on late collision"
 
 test_summary

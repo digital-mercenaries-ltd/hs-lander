@@ -38,33 +38,49 @@ if [[ ! -f "$account_config" ]]; then
   exit 1
 fi
 
-# 2. Copy scripts/*.sh into project/scripts/ (no-clobber).
+# 2. Plan all copies. Gather source→dest pairs for scripts/ and scaffold/ in
+#    one pass and check EVERY target is clear before touching the filesystem.
+#    Two-pass design: a collision in the middle of copying would otherwise
+#    leave the project in a partial-scaffold state that won't re-run cleanly.
 dest_scripts="$project_dir/scripts"
-mkdir -p "$dest_scripts"
+script_sources=()
+script_dests=()
 for entry in "$framework_home/scripts"/*.sh; do
   [[ -f "$entry" ]] || continue
-  name=$(basename "$entry")
-  if [[ -e "$dest_scripts/$name" ]]; then
-    echo "SCAFFOLD=error collision $dest_scripts/$name"
-    exit 1
-  fi
-  cp "$entry" "$dest_scripts/$name"
-  chmod +x "$dest_scripts/$name"
+  script_sources+=("$entry")
+  script_dests+=("$dest_scripts/$(basename "$entry")")
 done
-echo "SCAFFOLD_SCRIPTS=copied $dest_scripts"
 
-# 3. Copy scaffold/* into project dir (no-clobber). Skip project.config.sh here
-#    — the pointer is handled by init-project-pointer.sh in step 5 and would
-#    collide if the caller pre-created it.
+template_sources=()
+template_dests=()
 for entry in "$framework_home/scaffold"/*; do
   [[ -e "$entry" ]] || continue
   name=$(basename "$entry")
+  # project.config.example.sh is superseded by the pointer init-project-pointer.sh
+  # writes in step 5 — copying it would force a collision on every real project.
   [[ "$name" == "project.config.example.sh" ]] && continue
-  if [[ -e "$project_dir/$name" ]]; then
-    echo "SCAFFOLD=error collision $project_dir/$name"
+  template_sources+=("$entry")
+  template_dests+=("$project_dir/$name")
+done
+
+for dest in "${script_dests[@]}" "${template_dests[@]}"; do
+  if [[ -e "$dest" ]]; then
+    echo "SCAFFOLD=error collision $dest"
     exit 1
   fi
-  cp -R "$entry" "$project_dir/$name"
+done
+
+# 3. Execute copies. All targets verified clear above, so any failure here is
+#    a filesystem error, not a contract violation.
+mkdir -p "$dest_scripts"
+for i in "${!script_sources[@]}"; do
+  cp "${script_sources[$i]}" "${script_dests[$i]}"
+  chmod +x "${script_dests[$i]}"
+done
+echo "SCAFFOLD_SCRIPTS=copied $dest_scripts"
+
+for i in "${!template_sources[@]}"; do
+  cp -R "${template_sources[$i]}" "${template_dests[$i]}"
 done
 echo "SCAFFOLD_TEMPLATE=copied $project_dir"
 

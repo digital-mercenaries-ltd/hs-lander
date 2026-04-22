@@ -52,8 +52,15 @@ source "\${HOME}/.config/hs-lander/\${HS_LANDER_ACCOUNT}/\${HS_LANDER_PROJECT}.s
 EOF
 }
 
+# Require the project directory to exist. Silently creating it would scatter
+# stray project.config.sh files if HS_LANDER_PROJECT_DIR is a typo or the
+# caller ran from the wrong CWD — both flows imply the dir already exists.
+if [[ ! -d "$project_dir" ]]; then
+  echo "INIT_POINTER=error project-dir-missing $project_dir"
+  exit 1
+fi
+
 if [[ ! -f "$pointer" ]]; then
-  mkdir -p "$project_dir"
   _write_pointer
   echo "INIT_POINTER=created $pointer"
   exit 0

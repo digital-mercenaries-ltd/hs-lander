@@ -69,4 +69,22 @@ TMP4=$(mktemp -d)
 HS_LANDER_PROJECT_DIR="$TMP4" bash "$SCRIPT" >"$TMP4/log" 2>&1 && exit4=0 || exit4=$?
 assert_equal "$exit4" "1" "exit 1 when args missing"
 
+# --- Scenario 5: project dir missing → refuse to create it silently ---
+# A typo or wrong CWD for HS_LANDER_PROJECT_DIR used to result in a silently
+# created directory holding a stray pointer. The script must now error.
+
+echo ""
+echo "--- Scenario 5: project dir does not exist → error ---"
+TMP5=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}"' EXIT
+nonexistent="$TMP5/does-not-exist"
+HS_LANDER_PROJECT_DIR="$nonexistent" bash "$SCRIPT" dml heard >"$TMP5/log" 2>&1 && exit5=0 || exit5=$?
+assert_equal "$exit5" "1" "exit 1 when project dir missing"
+assert_file_contains "$TMP5/log" "^INIT_POINTER=error project-dir-missing" "missing-dir error reported"
+if [[ -d "$nonexistent" ]]; then
+  assert_equal "created" "must-NOT-have-been-created" "init must not silently create the project dir"
+else
+  assert_equal "1" "1" "project dir not silently created"
+fi
+
 test_summary
