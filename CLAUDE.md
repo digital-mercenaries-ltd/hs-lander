@@ -10,6 +10,8 @@ hs-lander — a reusable HubSpot landing page framework. Terraform modules, buil
 
 ## Status
 
+Current version: see `VERSION` (framework SSoT). `preflight.sh` emits it as `PREFLIGHT_FRAMEWORK_VERSION=<value>` so the skill can check compatibility. Bump `VERSION` in any PR that changes the skill-facing contract; cut a matching `v<VERSION>` tag on merge.
+
 v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, three local test suites (39 assertions, all passing), and CI workflows are in place.
 
 **Shipped:**
@@ -47,6 +49,7 @@ bash tests/test-init-project-pointer.sh
 bash tests/test-scaffold-project.sh
 bash tests/test-accounts-init.sh
 bash tests/test-set-project-field.sh
+bash tests/test-version.sh
 
 # Run deployment test against a live project (requires HubSpot creds + a deployed project directory)
 # bash tests/test-deployment.sh /path/to/project
@@ -90,6 +93,7 @@ hs-lander/
 │   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering config, credential, API, scopes, DNS
 │   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
 │   ├── hs-curl.sh           ← Keychain → curl HubSpot API
+│   ├── version.sh               ← FRAMEWORK_VERSION=<value> from ../VERSION
 │   ├── accounts-list.sh         ← ACCOUNTS=<csv> of configured accounts (pre-scaffold)
 │   ├── accounts-describe.sh     ← ACCOUNT_* fields for a given account (pre-scaffold)
 │   ├── accounts-init.sh         ← Create a new account profile from args (config mutation)
@@ -116,6 +120,7 @@ hs-lander/
 │   ├── test-scaffold-project.sh  ← Local, end-to-end pre-scaffold flow
 │   ├── test-accounts-init.sh     ← Local, sandboxed account-profile creation
 │   ├── test-set-project-field.sh ← Local, sandboxed project-field updates
+│   ├── test-version.sh           ← Local, version.sh + VERSION file
 │   └── test-deployment.sh        ← Network required, live HubSpot
 └── .github/workflows/
     └── ci.yml               ← Lint + build test + plan test (every push)

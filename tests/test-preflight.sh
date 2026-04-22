@@ -18,6 +18,7 @@ assert_file_exists "$REPO_DIR/scripts/preflight.sh" "scripts/preflight.sh exists
 # picture and coach the user wrongly — this assertion catches that regression
 # class.
 PREFLIGHT_CONTRACT_KEYS=(
+  PREFLIGHT_FRAMEWORK_VERSION
   PREFLIGHT_TOOLS_REQUIRED
   PREFLIGHT_PROJECT_POINTER
   PREFLIGHT_ACCOUNT_PROFILE
@@ -59,6 +60,10 @@ setup_env() {
     "$dir/mock-bin"
   cp "$REPO_DIR/scripts/preflight.sh" "$dir/project/scripts/preflight.sh"
   chmod +x "$dir/project/scripts/preflight.sh"
+  # VERSION file at the project root, mirroring scaffold-project.sh layout.
+  # preflight.sh resolves VERSION from its own script location, so this sits
+  # at $dir/project/VERSION (one level up from $dir/project/scripts/).
+  printf 'test-version-9.9.9\n' > "$dir/project/VERSION"
   printf '%s' "$dir"
 }
 
@@ -670,7 +675,7 @@ assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools
 assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
 assert_full_contract "$LOGO" "Scenario O"
 preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
-assert_equal "$preflight_line_count" "12" "exactly 12 PREFLIGHT_* lines when required tool missing"
+assert_equal "$preflight_line_count" "13" "exactly 13 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 12)"
 
 # --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
 # Two tools missing: csv list in the detail.
@@ -735,7 +740,7 @@ write_project_sourcing_chain "$TMPR"
 write_mock_bin "$TMPR"
 LOGR="$TMPR/preflight.log"
 run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
-expected_order=$'PREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 
@@ -796,7 +801,40 @@ rm -rf "$ALIEN_CWD"
 assert_equal "$exitT" "0" "exit 0 when HS_LANDER_PROJECT_DIR points at the project dir"
 assert_file_contains "$LOGT" "^PREFLIGHT_PROJECT_POINTER=ok" "pointer resolves via env-var override even when \$PWD has no project.config.sh"
 
+# --- Scenario U: FRAMEWORK_VERSION value from VERSION file ---
+# setup_env writes `test-version-9.9.9` to $dir/project/VERSION. Verify
+# preflight reads it verbatim (no unexpected mangling from the tr -d strip).
+
+echo ""
+echo "--- Scenario U: FRAMEWORK_VERSION echoes VERSION file ---"
+TMPU=$(setup_env)
+write_account_config "$TMPU"
+write_project_config "$TMPU"
+write_project_sourcing_chain "$TMPU"
+write_mock_bin "$TMPU"
+LOGU="$TMPU/preflight.log"
+run_preflight_capture "$TMPU" "$LOGU" >/dev/null || true
+assert_file_contains "$LOGU" "^PREFLIGHT_FRAMEWORK_VERSION=test-version-9.9.9$" "FRAMEWORK_VERSION reports the VERSION file content"
+
+# --- Scenario V: VERSION file missing → FRAMEWORK_VERSION=unknown ---
+# Skill-facing graceful degradation: absence of VERSION is reported as
+# `unknown` rather than an error — the rest of preflight still runs.
+
+echo ""
+echo "--- Scenario V: missing VERSION → FRAMEWORK_VERSION=unknown ---"
+TMPV=$(setup_env)
+rm -f "$TMPV/project/VERSION"
+write_account_config "$TMPV"
+write_project_config "$TMPV"
+write_project_sourcing_chain "$TMPV"
+write_mock_bin "$TMPV"
+LOGV="$TMPV/preflight.log"
+exitV=$(run_preflight_capture "$TMPV" "$LOGV" || true)
+assert_equal "$exitV" "0" "exit 0 when VERSION absent — only FRAMEWORK_VERSION reports unknown, other checks run normally"
+assert_file_contains "$LOGV" "^PREFLIGHT_FRAMEWORK_VERSION=unknown$" "FRAMEWORK_VERSION reports unknown when file absent"
+assert_file_contains "$LOGV" "^PREFLIGHT_API_ACCESS=ok" "downstream checks still run with VERSION absent"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}" "${TMPU:-}" "${TMPV:-}"' EXIT
 
 test_summary
