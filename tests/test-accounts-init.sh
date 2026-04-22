@@ -32,6 +32,11 @@ assert_file_contains "$TMP1/dml/config.sh" '^HUBSPOT_PORTAL_ID="147959629"$' "po
 assert_file_contains "$TMP1/dml/config.sh" '^HUBSPOT_REGION="eu1"$' "region written"
 assert_file_contains "$TMP1/dml/config.sh" '^DOMAIN_PATTERN="\*\.example\.com"$' "domain pattern written"
 assert_file_contains "$TMP1/dml/config.sh" '^HUBSPOT_TOKEN_KEYCHAIN_SERVICE="dml-hubspot-access-token"$' "service name written"
+# v1.5.0: subscription + office-location lines always emitted (empty when
+# the optional trailing args are omitted). Keeps schema uniform across
+# account configs — readers never need to branch on field presence.
+assert_file_contains "$TMP1/dml/config.sh" '^HUBSPOT_SUBSCRIPTION_ID=""$' "subscription id present as empty on 5-arg create"
+assert_file_contains "$TMP1/dml/config.sh" '^HUBSPOT_OFFICE_LOCATION_ID=""$' "office location id present as empty on 5-arg create"
 
 # Round-trip: sourcing the written file yields the original values.
 (
@@ -111,6 +116,52 @@ assert_equal "$r" "1" "exit 1 on backtick in portal-id"
 # by a prior mkdir in a future refactor — check just that the config.sh is absent)
 if [[ -f "$TMP7/dml/config.sh" ]]; then
   assert_equal "present" "must-NOT-exist" "no config.sh created after rejection"
+else
+  assert_equal "1" "1" "no config.sh written on banned-char rejection"
+fi
+
+# --- Scenario 8: 7-arg variant writes subscription + office-location ---
+echo ""
+echo "--- Scenario 8: 7-arg variant populates subscription + office-location ---"
+TMP8=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}"' EXIT
+exit8=$(run "$TMP8" "$TMP8/log" acme 147959629 eu1 "*.acme.com" acme-svc 2269639338 375327044798 || true)
+assert_equal "$exit8" "0" "exit 0 on 7-arg create"
+assert_file_contains "$TMP8/acme/config.sh" '^HUBSPOT_SUBSCRIPTION_ID="2269639338"$' "subscription id populated"
+assert_file_contains "$TMP8/acme/config.sh" '^HUBSPOT_OFFICE_LOCATION_ID="375327044798"$' "office location id populated"
+
+# --- Scenario 9: 6-arg variant (subscription set, office-location empty) ---
+echo ""
+echo "--- Scenario 9: 6-arg variant populates only subscription ---"
+TMP9=$(mktemp -d)
+exit9=$(run "$TMP9" "$TMP9/log" acme 147959629 eu1 "*.acme.com" acme-svc 2269639338 || true)
+assert_equal "$exit9" "0" "exit 0 on 6-arg create"
+assert_file_contains "$TMP9/acme/config.sh" '^HUBSPOT_SUBSCRIPTION_ID="2269639338"$' "subscription id populated on 6-arg"
+assert_file_contains "$TMP9/acme/config.sh" '^HUBSPOT_OFFICE_LOCATION_ID=""$' "office location empty when 7th arg omitted"
+
+# --- Scenario 10: too many args rejected ---
+echo ""
+echo "--- Scenario 10: 8 args rejected ---"
+TMP10=$(mktemp -d)
+HS_LANDER_CONFIG_DIR="$TMP10" bash "$SCRIPT" acme 1 eu1 "" svc sub office extra >"$TMP10/log" 2>&1 && exit10=0 || exit10=$?
+assert_equal "$exit10" "1" "exit 1 on 8-arg call"
+assert_file_contains "$TMP10/log" "^ACCOUNTS_INIT=error usage:" "usage error reported"
+
+# --- Scenario 11: banned chars in subscription/office args ---
+echo ""
+echo "--- Scenario 11: banned chars in subscription/office-location rejected ---"
+TMP11=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}"' EXIT
+
+HS_LANDER_CONFIG_DIR="$TMP11" bash "$SCRIPT" acme 1 eu1 "" svc 'sub$inj' "" >"$TMP11/log-sub" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on dollar in subscription-id"
+assert_file_contains "$TMP11/log-sub" "^ACCOUNTS_INIT=error invalid-value subscription_id" "invalid-value reported for subscription_id"
+
+HS_LANDER_CONFIG_DIR="$TMP11" bash "$SCRIPT" acme 1 eu1 "" svc "" 'off`tick`' >"$TMP11/log-off" 2>&1 && r=0 || r=$?
+assert_equal "$r" "1" "exit 1 on backtick in office-location-id"
+
+if [[ -f "$TMP11/acme/config.sh" ]]; then
+  assert_equal "present" "must-NOT-exist" "no config.sh created after banned-char rejection"
 else
   assert_equal "1" "1" "no config.sh written on banned-char rejection"
 fi

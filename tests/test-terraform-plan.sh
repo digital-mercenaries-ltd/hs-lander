@@ -120,6 +120,64 @@ assert_equal "$result" "true" \
   "contact_list depends_on includes the project_source anchor (got: [$contact_list_deps])"
 
 echo ""
+echo "--- Marketing email v1.5.0 payload shape ---"
+# The v1.5.0 email payload is structurally different from v1.4.0:
+# - type is AUTOMATED_EMAIL (was REGULAR, which HubSpot silently coerced
+#   to BATCH_EMAIL)
+# - `from` is a nested object (was top-level fromName/replyTo, which
+#   HubSpot silently dropped to null)
+# - subscriptionDetails carries portal-specific IDs (was absent)
+# - content uses DnD widget tree (primary_rich_text_module.body.rich_text
+#   holds the HTML; content.html is gone — it was silently discarded)
+
+assert_file_contains "$PLAN_TXT" 'type *= *"AUTOMATED_EMAIL"' \
+  "welcome_email type is AUTOMATED_EMAIL"
+assert_file_contains "$PLAN_TXT" 'subcategory *= *"automated"' \
+  "welcome_email subcategory is automated"
+assert_file_contains "$PLAN_TXT" 'emailTemplateMode *= *"DRAG_AND_DROP"' \
+  "welcome_email uses DnD template mode"
+assert_file_contains "$PLAN_TXT" 'fromName *= *"Test Project"' \
+  "welcome_email fromName populated (inside nested from block)"
+assert_file_contains "$PLAN_TXT" 'subscriptionId *= *"2269639338"' \
+  "welcome_email subscriptionDetails.subscriptionId from fixture"
+assert_file_contains "$PLAN_TXT" 'officeLocationId *= *"375327044798"' \
+  "welcome_email subscriptionDetails.officeLocationId from fixture"
+assert_file_contains "$PLAN_TXT" "primary_rich_text_module" \
+  "welcome_email content has DnD primary_rich_text_module widget"
+
+# Guard against regression to the broken v1.4.0 payload. The plan should
+# never render content.html as an attribute, never mention REGULAR type.
+if grep -qE '^\s+html +=' "$PLAN_TXT"; then
+  result="false"
+else
+  result="true"
+fi
+assert_equal "$result" "true" "no top-level content.html (DnD widgets replaced it)"
+
+if grep -qE 'type *= *"REGULAR"' "$PLAN_TXT"; then
+  result="false"
+else
+  result="true"
+fi
+assert_equal "$result" "true" "email type is not the broken REGULAR value"
+
+echo ""
+echo "--- Hosting-modes plumbing ---"
+# Fixture uses landing_slug = "" (default) and thankyou_slug = "thank-you".
+# The thankyou_page slug must appear verbatim in the plan — confirms
+# var.thankyou_slug flows through. No UUID-mangled slug should appear
+# (that was the v1.0.0 symptom on empty-domain, empty-slug paths).
+assert_file_contains "$PLAN_TXT" 'slug *= *"thank-you"' \
+  "thankyou_page slug honoured from var.thankyou_slug"
+
+if grep -qE 'slug += "-temporary-slug-' "$PLAN_TXT"; then
+  result="false"
+else
+  result="true"
+fi
+assert_equal "$result" "true" "no placeholder UUID slugs in plan output"
+
+echo ""
 echo "--- No unexpected destroy actions ---"
 destroy_count=$(echo "$PLAN_TEXT" | grep -c "will be destroyed" || true)
 assert_equal "$destroy_count" "0" "no resources to destroy"

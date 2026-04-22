@@ -113,6 +113,12 @@ GA4_MEASUREMENT_ID=""
 CAPTURE_FORM_ID=""
 SURVEY_FORM_ID=""
 LIST_ID=""
+
+# Hosting-mode plumbing (v1.5.0+). Defaults match custom-domain-primary mode.
+# See docs/framework.md "Hosting modes" for how to configure each mode.
+LANDING_SLUG=""
+THANKYOU_SLUG="thank-you"
+HOSTING_MODE_HINT=""
 EOF
   echo "SCAFFOLD_PROJECT_PROFILE=created $project_profile"
 fi

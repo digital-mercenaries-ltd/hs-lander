@@ -213,4 +213,29 @@ HS_LANDER_CONFIG_DIR="$TMP11" bash "$SCRIPT" dml heard DOMAIN=clean.example.com 
 stale=$(find "$TMP11/dml" -maxdepth 1 -name 'heard.sh.tmp.*' | wc -l | tr -d ' ')
 assert_equal "$stale" "0" "no stale .tmp.* files in account dir after success"
 
+# --- Scenario 12: v1.5.0 allow-list extensions accepted ---
+# LANDING_SLUG, THANKYOU_SLUG, HOSTING_MODE_HINT, HUBSPOT_SUBSCRIPTION_ID,
+# HUBSPOT_OFFICE_LOCATION_ID all landed as allowed keys in v1.5.0 for the
+# hosting-modes + marketing-email plumbing. HUBSPOT_TOKEN_KEYCHAIN_SERVICE
+# remains rejected (Scenario 4 still covers that).
+echo ""
+echo "--- Scenario 12: v1.5.0 allow-list extensions ---"
+TMP12=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}" "${TMP12:-}"' EXIT
+seed_profile "$TMP12"
+exit12=$(run "$TMP12" "$TMP12/log" dml heard \
+  LANDING_SLUG="heard" \
+  THANKYOU_SLUG="thanks" \
+  HOSTING_MODE_HINT="redirect" \
+  HUBSPOT_SUBSCRIPTION_ID="2269639338" \
+  HUBSPOT_OFFICE_LOCATION_ID="375327044798" \
+  || true)
+assert_equal "$exit12" "0" "exit 0 with all v1.5.0 keys"
+assert_file_contains "$TMP12/log" "^SET_FIELD=ok$" "ok terminator emitted"
+assert_file_contains "$TMP12/dml/heard.sh" '^LANDING_SLUG="heard"$' "LANDING_SLUG written"
+assert_file_contains "$TMP12/dml/heard.sh" '^THANKYOU_SLUG="thanks"$' "THANKYOU_SLUG written"
+assert_file_contains "$TMP12/dml/heard.sh" '^HOSTING_MODE_HINT="redirect"$' "HOSTING_MODE_HINT written"
+assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_SUBSCRIPTION_ID="2269639338"$' "HUBSPOT_SUBSCRIPTION_ID written"
+assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_OFFICE_LOCATION_ID="375327044798"$' "HUBSPOT_OFFICE_LOCATION_ID written"
+
 test_summary

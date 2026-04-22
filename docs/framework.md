@@ -77,9 +77,30 @@ Run once per HubSpot account. Creates the `project_source` CRM contact property 
 
 Run per project. Creates: capture form, optional survey form, landing page, thank-you page, welcome email, contact list, and optional custom CRM properties.
 
-Required input: `project_source_property_id = module.account_setup.project_source_property_id`. This wires the list resource's creation order behind the `project_source` property so apply cannot race them. Without this the Lists API rejects the filter payload with `The following properties did not exist for the object: project_source`.
+Required inputs:
+
+- `project_source_property_id = module.account_setup.project_source_property_id` — wires the list resource's creation order behind the `project_source` property so apply cannot race them. Without this the Lists API rejects the filter payload with `The following properties did not exist for the object: project_source`.
+- `hubspot_subscription_id` and `hubspot_office_location_id` — per-portal values from HubSpot UI (Settings → Marketing → Email → Subscription Types / Office Locations). The welcome email's `subscriptionDetails` payload is rejected without them. Scope-restricted lookup isn't available with the framework's default scope set; user provides them once in the account profile.
+- `email_body_html` — the welcome email's HTML body content, injected into the DnD `primary_rich_text_module` widget. Scaffold reads it via `file("${path.module}/../dist/emails/welcome-body.html")`.
 
 Both modules use the Mastercard/restapi provider (~1.19) and inherit the provider configuration from the consuming project's root module.
+
+**Sender verification (prerequisite):** the `email_reply_to` address must be a verified sender on the HubSpot portal. HubSpot will accept resource creation with an unverified address but the welcome email workflow will not deliver when triggered. Verify the address in HubSpot UI: Marketing → Email → Settings → From Address before relying on send.
+
+## Hosting modes
+
+The framework is pure plumbing — it sends whatever `DOMAIN` and `LANDING_SLUG` the project profile supplies. Four hosting modes are supported by setting those two variables appropriately; the Terraform code path is identical across all four.
+
+| Mode | `DOMAIN` | `LANDING_SLUG` | HubSpot side | External side |
+|------|----------|----------------|--------------|---------------|
+| Custom-domain-primary | `heard.example.com` | `""` | Custom domain connected, `isPrimaryLandingPage = true` | CNAME → HubSpot CDN |
+| System-domain | `147959629.hs-sites-eu1.com` | `"heard"` | No custom-domain work; system domain is auto-provisioned | Nothing |
+| System-domain-redirect | `147959629.hs-sites-eu1.com` | `"heard"` | Same as system-domain | URL-forward `vanity.example.com` → `<system-domain>/<slug>` |
+| System-domain-iframe (roadmap) | `147959629.hs-sites-eu1.com` | `"heard"` | Same as system-domain | S3 + CloudFront with iframe wrapper at `vanity.example.com` |
+
+Switch modes by editing the project profile (`set-project-field.sh <account> <project> DOMAIN=... LANDING_SLUG=...`) and re-running `terraform apply`. No re-creation of resources needed — the pages' `domain` and `slug` fields update in place.
+
+`HOSTING_MODE_HINT` is an optional project-profile string. The framework itself ignores it; the skill (separate plan) reads it to pick mode-specific preflight checks and coaching.
 
 ## Authentication
 
@@ -92,6 +113,8 @@ HUBSPOT_PORTAL_ID=""               # e.g. 12345678
 HUBSPOT_REGION=""                  # eu1 or na1
 DOMAIN_PATTERN=""                  # e.g. *.example.com
 HUBSPOT_TOKEN_KEYCHAIN_SERVICE=""  # e.g. <account>-hubspot-access-token
+HUBSPOT_SUBSCRIPTION_ID=""         # Settings → Marketing → Email → Subscription Types
+HUBSPOT_OFFICE_LOCATION_ID=""      # Settings → Marketing → Email → Office Locations
 ```
 
 Scripts read the token via:
@@ -115,7 +138,7 @@ All of them respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and, 
 | Script | Output | Exit |
 |---|---|---|
 | `scripts/accounts-list.sh` | `ACCOUNTS=<csv>` (empty when none) | 0 always |
-| `scripts/accounts-describe.sh <account>` | `ACCOUNT_PORTAL_ID=…`, `ACCOUNT_REGION=…`, `ACCOUNT_DOMAIN_PATTERN=…`, `ACCOUNT_TOKEN_KEYCHAIN_SERVICE=…`; or `ACCOUNT_STATUS=missing <path>` | 0 on ok, 1 on missing/args |
+| `scripts/accounts-describe.sh <account>` | `ACCOUNT_PORTAL_ID=…`, `ACCOUNT_REGION=…`, `ACCOUNT_DOMAIN_PATTERN=…`, `ACCOUNT_TOKEN_KEYCHAIN_SERVICE=…`, `ACCOUNT_SUBSCRIPTION_ID=…`, `ACCOUNT_OFFICE_LOCATION_ID=…`; or `ACCOUNT_STATUS=missing <path>` | 0 on ok, 1 on missing/args |
 | `scripts/projects-list.sh <account>` | `PROJECTS=<csv>`; or `ACCOUNT_STATUS=missing <path>` | 0 if account exists, 1 if missing |
 | `scripts/init-project-pointer.sh <account> <project>` | `INIT_POINTER=created\|present\|conflict <path>` | 0 on created/present, 1 on conflict/args |
 | `scripts/scaffold-project.sh <account> <project>` | Multi-line: `SCAFFOLD_SCRIPTS=`, `SCAFFOLD_TEMPLATE=`, `SCAFFOLD_PROJECT_PROFILE=`, `SCAFFOLD_POINTER=`, terminator `SCAFFOLD=ok`. Errors: `SCAFFOLD=error <reason>` | 0 on ok, 1 on any error |
@@ -130,13 +153,13 @@ The skill (or human operator) uses these to create and update the operational fi
 
 | Script | Purpose | Output | Exit |
 |---|---|---|---|
-| `scripts/accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service>` | First-time creation of an account profile (`~/.config/hs-lander/<account>/config.sh`) | `ACCOUNTS_INIT=created\|conflict\|error <detail>` | 0 on created, 1 on conflict/error |
+| `scripts/accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service> [<subscription-id>] [<office-location-id>]` | First-time creation of an account profile (`~/.config/hs-lander/<account>/config.sh`). Trailing two args optional — supply when known; otherwise add later via manual edit. | `ACCOUNTS_INIT=created\|conflict\|error <detail>` | 0 on created, 1 on conflict/error |
 | `scripts/set-project-field.sh <account> <project> KEY=VALUE [...]` | Update one or more fields in an existing project profile | `SET_FIELD_UPDATED=<key>` or `SET_FIELD_APPENDED=<key>` per pair, then `SET_FIELD=ok`; or `SET_FIELD=error <reason>` | 0 on ok, 1 on error |
 
 **Credential safety:**
 
 - `accounts-init.sh` takes the Keychain *service name* as an argument and writes that reference into the config file. It never reads, writes, or otherwise touches the Keychain itself — adding the actual token is the user's manual step (`security add-generic-password …` or Keychain Access).
-- `set-project-field.sh` only accepts project-profile keys (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`). Account-level fields (including `HUBSPOT_TOKEN_KEYCHAIN_SERVICE`) are rejected with `SET_FIELD=error unknown-key <key>` — no file write happens in that case.
+- `set-project-field.sh` only accepts project-profile keys (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`, `LANDING_SLUG`, `THANKYOU_SLUG`, `HOSTING_MODE_HINT`, `HUBSPOT_SUBSCRIPTION_ID`, `HUBSPOT_OFFICE_LOCATION_ID`). Credential-reference fields (`HUBSPOT_TOKEN_KEYCHAIN_SERVICE`) are rejected with `SET_FIELD=error unknown-key <key>` — no file write happens in that case. The last two are account-level by convention but setting them at project level is a legitimate per-project override.
 
 **Validation is up-front:** `set-project-field.sh` checks every `KEY=VALUE` pair before touching the file, so one bad pair in a batch rejects the whole batch and leaves the profile unchanged.
 

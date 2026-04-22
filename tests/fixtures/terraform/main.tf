@@ -40,7 +40,9 @@ module "landing_page" {
   email_subject              = "Welcome to Test"
   email_from_name            = "Test Project"
   email_reply_to             = "test@example.com"
-  email_body_path            = "${path.module}/../emails/welcome-body.html"
+  email_body_html            = file("${path.module}/../emails/welcome-body.html")
+  hubspot_subscription_id    = "2269639338"
+  hubspot_office_location_id = "375327044798"
   page_landing_name          = "Test — Landing Page"
   page_landing_title         = "Test Project"
   page_thankyou_name         = "Test — Thank You"

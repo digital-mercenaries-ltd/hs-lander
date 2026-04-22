@@ -29,6 +29,8 @@ HUBSPOT_PORTAL_ID="147959629"
 HUBSPOT_REGION="eu1"
 DOMAIN_PATTERN="*.dml.example.com"
 HUBSPOT_TOKEN_KEYCHAIN_SERVICE="dml-hubspot-access-token"
+HUBSPOT_SUBSCRIPTION_ID="2269639338"
+HUBSPOT_OFFICE_LOCATION_ID="375327044798"
 EOF
 exit1=$(run "$TMP1" dml "$TMP1/log" || true)
 assert_equal "$exit1" "0" "exit 0 when profile is complete"
@@ -36,6 +38,8 @@ assert_file_contains "$TMP1/log" "^ACCOUNT_PORTAL_ID=147959629$" "portal id repo
 assert_file_contains "$TMP1/log" "^ACCOUNT_REGION=eu1$" "region reported"
 assert_file_contains "$TMP1/log" "^ACCOUNT_DOMAIN_PATTERN=\*\.dml\.example\.com$" "domain pattern reported"
 assert_file_contains "$TMP1/log" "^ACCOUNT_TOKEN_KEYCHAIN_SERVICE=dml-hubspot-access-token$" "Keychain service name reported"
+assert_file_contains "$TMP1/log" "^ACCOUNT_SUBSCRIPTION_ID=2269639338$" "subscription id reported"
+assert_file_contains "$TMP1/log" "^ACCOUNT_OFFICE_LOCATION_ID=375327044798$" "office location id reported"
 
 # --- Scenario 2: missing account → ACCOUNT_STATUS=missing, exit 1 ---
 echo ""
@@ -77,5 +81,25 @@ else
   assert_equal "1" "1" "accounts-describe did not invoke security"
 fi
 assert_file_not_contains "$TMP4/log" "leaked-token" "no token value appears in output"
+
+# --- Scenario 5: pre-v1.5.0 profile → subscription/office fields are empty ---
+# Accounts created before v1.5.0 don't have the new fields. The describe
+# output must still include the lines, with empty values, so skill parsing
+# never has to branch on field presence.
+echo ""
+echo "--- Scenario 5: pre-v1.5.0 profile emits empty new fields ---"
+TMP5=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}"' EXIT
+mkdir -p "$TMP5/legacy"
+cat > "$TMP5/legacy/config.sh" <<'EOF'
+HUBSPOT_PORTAL_ID="99999999"
+HUBSPOT_REGION="na1"
+DOMAIN_PATTERN=""
+HUBSPOT_TOKEN_KEYCHAIN_SERVICE="legacy-svc"
+EOF
+exit5=$(run "$TMP5" legacy "$TMP5/log" || true)
+assert_equal "$exit5" "0" "exit 0 on pre-v1.5.0 profile"
+assert_file_contains "$TMP5/log" "^ACCOUNT_SUBSCRIPTION_ID=$" "empty subscription id line emitted"
+assert_file_contains "$TMP5/log" "^ACCOUNT_OFFICE_LOCATION_ID=$" "empty office location id line emitted"
 
 test_summary

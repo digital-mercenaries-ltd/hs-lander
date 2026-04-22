@@ -58,6 +58,10 @@ assert_file_contains "$TMP1/proj/project.config.sh" 'HS_LANDER_PROJECT="heard"' 
 assert_file_exists "$TMP1/cfg/dml/heard.sh" "project profile stub created"
 assert_file_contains "$TMP1/cfg/dml/heard.sh" 'PROJECT_SLUG="heard"' "stub has project slug"
 assert_file_contains "$TMP1/cfg/dml/heard.sh" 'CAPTURE_FORM_ID=""' "stub has empty form id"
+# v1.5.0 hosting-modes fields — stub seeds sensible defaults per custom-domain-primary mode
+assert_file_contains "$TMP1/cfg/dml/heard.sh" 'LANDING_SLUG=""' "stub has LANDING_SLUG default"
+assert_file_contains "$TMP1/cfg/dml/heard.sh" 'THANKYOU_SLUG="thank-you"' "stub has THANKYOU_SLUG default"
+assert_file_contains "$TMP1/cfg/dml/heard.sh" 'HOSTING_MODE_HINT=""' "stub has HOSTING_MODE_HINT default"
 
 # --- Scenario 2: account missing → SCAFFOLD=error account-missing, exit 1 ---
 echo ""

@@ -6,7 +6,15 @@
 #
 # Usage:
 #   bash scripts/accounts-init.sh <account> <portal-id> <region> \
-#                                 <domain-pattern> <token-keychain-service>
+#                                 <domain-pattern> <token-keychain-service> \
+#                                 [<subscription-id>] [<office-location-id>]
+#
+# The two trailing args (subscription ID, office location ID) are optional —
+# supply empty strings or omit them when they're not yet known. Marketing
+# email creation (v1.5.0+) needs both; if absent, `terraform apply` will
+# fail on the welcome_email resource with a missing-variable error until
+# they're added via another accounts-init (safe — fresh account) or a
+# manual edit of ~/.config/hs-lander/<account>/config.sh.
 #
 # Output:
 #   ACCOUNTS_INIT=created <path>       — profile written (exit 0)
@@ -14,8 +22,8 @@
 #   ACCOUNTS_INIT=error <reason>       — invalid input (exit 1)
 set -euo pipefail
 
-if [[ $# -ne 5 ]]; then
-  echo "ACCOUNTS_INIT=error usage: accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service>" >&2
+if [[ $# -lt 5 || $# -gt 7 ]]; then
+  echo "ACCOUNTS_INIT=error usage: accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service> [<subscription-id>] [<office-location-id>]" >&2
   exit 1
 fi
 account="$1"
@@ -23,6 +31,8 @@ portal_id="$2"
 region="$3"
 domain_pattern="$4"
 token_service="$5"
+subscription_id="${6:-}"
+office_location_id="${7:-}"
 
 # Validate account name: lowercase letters, digits, hyphens only. Rejects
 # empty, slashes (path traversal), dots, spaces, uppercase — keeps the
@@ -55,7 +65,7 @@ _has_banned_char() {
   [[ "$1" != "$(printf '%s' "$1" | tr -d '[:cntrl:]')" ]] && return 0
   return 1
 }
-for field_name in portal_id domain_pattern token_service; do
+for field_name in portal_id domain_pattern token_service subscription_id office_location_id; do
   if _has_banned_char "${!field_name}"; then
     echo "ACCOUNTS_INIT=error invalid-value $field_name (contains disallowed character)"
     exit 1
@@ -82,6 +92,8 @@ HUBSPOT_PORTAL_ID="$portal_id"
 HUBSPOT_REGION="$region"
 DOMAIN_PATTERN="$domain_pattern"
 HUBSPOT_TOKEN_KEYCHAIN_SERVICE="$token_service"
+HUBSPOT_SUBSCRIPTION_ID="$subscription_id"
+HUBSPOT_OFFICE_LOCATION_ID="$office_location_id"
 EOF
 mv "$tmp_path" "$config_path"
 trap - EXIT
