@@ -24,6 +24,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-22-preflight-fix-and-prescaffold-commands.md | Complete | v1.3.x |
 | 2026-04-22-v1.4.0-api-drift-fixes.md (partial — fixes 1 + 2) | Complete | v1.4.0 |
 | 2026-04-22-v1.6.0-heard-apply-drift-fixes.md | Complete (retroactive) | v1.6.0 |
+| 2026-04-22-v1.6.1-provider-version-bump.md | Complete | v1.6.1 |
 
 ### In-flight
 
