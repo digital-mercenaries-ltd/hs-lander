@@ -91,9 +91,25 @@ variable "email_reply_to" {
   description = "Welcome email reply-to address"
 }
 
-variable "email_body_path" {
+variable "email_body_html" {
   type        = string
-  description = "Path to dist/ welcome email HTML body file"
+  description = "Raw HTML to embed inside the welcome email's primary rich-text widget. Rendered within HubSpot's DnD plain email template. Scaffold reads this from dist/emails/welcome-body.html via file()."
+}
+
+variable "email_language" {
+  type        = string
+  default     = "en-gb"
+  description = "Email language code (e.g. en-gb, en-us, fr, de)."
+}
+
+variable "hubspot_subscription_id" {
+  type        = string
+  description = "HubSpot subscription ID for the welcome email. Look up in HubSpot UI: Settings → Marketing → Email → Subscription Types. Per-portal value."
+}
+
+variable "hubspot_office_location_id" {
+  type        = string
+  description = "HubSpot office location ID for the welcome email. Look up in HubSpot UI: Settings → Marketing → Email → Office Locations. Per-portal value."
 }
 
 variable "page_landing_name" {

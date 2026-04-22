@@ -8,6 +8,8 @@
 #   ACCOUNT_REGION=<value>
 #   ACCOUNT_DOMAIN_PATTERN=<value>
 #   ACCOUNT_TOKEN_KEYCHAIN_SERVICE=<value>
+#   ACCOUNT_SUBSCRIPTION_ID=<value>           (empty when account pre-dates v1.5.0)
+#   ACCOUNT_OFFICE_LOCATION_ID=<value>        (empty when account pre-dates v1.5.0)
 # Output (when profile missing):
 #   ACCOUNT_STATUS=missing <path>
 # Exit:    0 on ok, 1 on missing profile or missing args.
@@ -40,5 +42,7 @@ values=$(
   printf 'ACCOUNT_REGION=%s\n'                 "${HUBSPOT_REGION:-}"
   printf 'ACCOUNT_DOMAIN_PATTERN=%s\n'         "${DOMAIN_PATTERN:-}"
   printf 'ACCOUNT_TOKEN_KEYCHAIN_SERVICE=%s\n' "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:-}"
+  printf 'ACCOUNT_SUBSCRIPTION_ID=%s\n'        "${HUBSPOT_SUBSCRIPTION_ID:-}"
+  printf 'ACCOUNT_OFFICE_LOCATION_ID=%s\n'     "${HUBSPOT_OFFICE_LOCATION_ID:-}"
 )
 printf '%s\n' "$values"

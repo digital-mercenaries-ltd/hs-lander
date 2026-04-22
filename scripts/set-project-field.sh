@@ -7,11 +7,17 @@
 #
 # Allowed keys (project-profile schema):
 #   PROJECT_SLUG, DOMAIN, DM_UPLOAD_PATH, GA4_MEASUREMENT_ID,
-#   CAPTURE_FORM_ID, SURVEY_FORM_ID, LIST_ID
+#   CAPTURE_FORM_ID, SURVEY_FORM_ID, LIST_ID,
+#   LANDING_SLUG, THANKYOU_SLUG, HOSTING_MODE_HINT,
+#   HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID
 #
 # Unknown keys are rejected (prevents typos creating zombie variables).
-# Account-level fields (e.g. HUBSPOT_TOKEN_KEYCHAIN_SERVICE) are intentionally
-# not on the allow-list — this script never writes credential references.
+# Account-level credential fields (e.g. HUBSPOT_TOKEN_KEYCHAIN_SERVICE) are
+# intentionally not on the allow-list — this script never writes credential
+# references. HUBSPOT_SUBSCRIPTION_ID and HUBSPOT_OFFICE_LOCATION_ID are
+# account-level by convention but appear here because the project-profile
+# sourcing chain pulls them into the same shell scope; setting them at
+# project level is a legitimate per-project override.
 #
 # Output contract:
 #   SET_FIELD_UPDATED=<key>       — existing line rewritten
@@ -30,6 +36,11 @@ ALLOWED_KEYS=(
   CAPTURE_FORM_ID
   SURVEY_FORM_ID
   LIST_ID
+  LANDING_SLUG
+  THANKYOU_SLUG
+  HOSTING_MODE_HINT
+  HUBSPOT_SUBSCRIPTION_ID
+  HUBSPOT_OFFICE_LOCATION_ID
 )
 
 _is_allowed_key() {

@@ -18,11 +18,19 @@ HUBSPOT_TOKEN=$(security find-generic-password \
   exit 1
 }
 
-# Export Terraform variables
+# Export Terraform variables. Values sourced from the account config
+# (via project.config.sh) and the project profile (same source chain).
+# LANDING_SLUG / THANKYOU_SLUG default per hosting-mode conventions when
+# the project profile doesn't set them; subscription/office-location are
+# account-level and must be set somewhere in the sourcing chain.
 export TF_VAR_hubspot_token="$HUBSPOT_TOKEN"
 export TF_VAR_hubspot_portal_id="$HUBSPOT_PORTAL_ID"
 export TF_VAR_domain="$DOMAIN"
 export TF_VAR_hubspot_region="$HUBSPOT_REGION"
+export TF_VAR_landing_slug="${LANDING_SLUG:-}"
+export TF_VAR_thankyou_slug="${THANKYOU_SLUG:-thank-you}"
+export TF_VAR_hubspot_subscription_id="${HUBSPOT_SUBSCRIPTION_ID:-}"
+export TF_VAR_hubspot_office_location_id="${HUBSPOT_OFFICE_LOCATION_ID:-}"
 
 # Run terraform
 exec terraform -chdir="$PROJECT_DIR/terraform" "$@"
