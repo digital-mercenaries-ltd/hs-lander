@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6.1 (2026-04-23)
+
+Patch — bumps the `Mastercard/restapi` provider constraint from `~> 1.19` to `~> 2.0` across all three files that declare it (`scaffold/terraform/main.tf`, `terraform/modules/landing-page/main.tf`, `terraform/modules/account-setup/main.tf`). No module contract changes; no script changes.
+
+### Fixed
+
+- **v1.6.0 `ignore_all_server_changes` attribute was unusable.** `terraform/modules/landing-page/lists.tf` uses `ignore_all_server_changes = true` to suppress drift detection on HubSpot's wrapped Lists API response. That attribute was added to `Mastercard/restapi` in v2.0.0 (April 2024), but both framework modules still pinned the provider to `~> 1.19` (cap 1.20.0), so every v1.6.0 apply errored at plan time with an unknown-attribute diagnostic. Terraform intersects module and root constraints, so the bump must live in the framework modules — bumping only the consuming project's root yields `no suitable version is available` because `~> 1.19, ~> 2.0` has no solution.
+
+### Migration
+
+Consumers pinning `?ref=v1.6.0` re-pin to `?ref=v1.6.1` and run `npm run tf:init -- -upgrade`. Terraform will select a 2.x provider automatically. No module inputs or outputs change. 2.x is additive over 1.x per the provider's own 2.0.0 release notes (the v2 attributes like `ignore_all_server_changes` are opt-in); existing committed 1.x state migrates in place without resource replacement. Projects still on v1.5.0 or earlier don't need to act — their module refs still install `~> 1.19`.
+
+Capped at `~> 2.0` rather than a wider range: v3.0.0 of the provider is a plugin-framework rewrite and warrants its own migration plan if pursued.
+
 ## v1.6.0 (2026-04-22)
 
 Minor bump — no breaking change to the module contract, but all three `landing-page` resources whose apply failed against Heard portal 147959629 under v1.5.0 are reworked. Projects already on v1.5.0 with successful applies will see `welcome_email` and `contact_list` as in-place updates; `capture_form` and `survey_form` will be updated in place as well. No new required inputs; re-pin `?ref=v1.6.0` and re-run `tf:init -upgrade && tf:plan`.
