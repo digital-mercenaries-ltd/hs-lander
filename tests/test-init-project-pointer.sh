@@ -29,7 +29,9 @@ assert_file_contains "$TMP1/log" "^INIT_POINTER=created" "created reported"
 assert_file_exists "$TMP1/project.config.sh" "pointer file written"
 assert_file_contains "$TMP1/project.config.sh" 'HS_LANDER_ACCOUNT="dml"' "account name written"
 assert_file_contains "$TMP1/project.config.sh" 'HS_LANDER_PROJECT="heard"' "project name written"
+# shellcheck disable=SC2016 # literal pattern for grep — we want the `${HOME}` text itself, not expansion
 assert_file_contains "$TMP1/project.config.sh" 'source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/config.sh"' "sources account config"
+# shellcheck disable=SC2016
 assert_file_contains "$TMP1/project.config.sh" 'source "${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"' "sources project config"
 
 # --- Scenario 2: re-run with same values → INIT_POINTER=present (idempotent) ---
