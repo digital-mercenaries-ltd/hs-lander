@@ -63,7 +63,10 @@ for entry in "$framework_home/scaffold"/*; do
   template_dests+=("$project_dir/$name")
 done
 
-for dest in "${script_dests[@]}" "${template_dests[@]}"; do
+version_src="$framework_home/VERSION"
+version_dest="$project_dir/VERSION"
+
+for dest in "${script_dests[@]}" "${template_dests[@]}" "$version_dest"; do
   if [[ -e "$dest" ]]; then
     echo "SCAFFOLD=error collision $dest"
     exit 1
@@ -83,6 +86,17 @@ for i in "${!template_sources[@]}"; do
   cp -R "${template_sources[$i]}" "${template_dests[$i]}"
 done
 echo "SCAFFOLD_TEMPLATE=copied $project_dir"
+
+# Copy VERSION so the project keeps a frozen record of which framework
+# version it was scaffolded against. preflight.sh reads this from the
+# project's root (../VERSION relative to preflight.sh), so the project's
+# preflight always reports the version that shipped with the copied scripts.
+if [[ -f "$version_src" ]]; then
+  cp "$version_src" "$version_dest"
+  echo "SCAFFOLD_VERSION=copied $version_dest"
+else
+  echo "SCAFFOLD_VERSION=skipped (framework VERSION file not found at $version_src)"
+fi
 
 # 4. Ensure the project profile exists (stub if new).
 if [[ -f "$project_profile" ]]; then

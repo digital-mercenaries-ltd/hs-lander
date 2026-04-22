@@ -30,6 +30,22 @@ set -euo pipefail
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
+# --- FRAMEWORK_VERSION ---
+# Always the first line. Emitted unconditionally, before any other check,
+# so the skill can read the framework version even when downstream checks
+# abort. Sourced from the VERSION file at the framework-install (or
+# project-scaffolded) root — resolved from this script's own location so it
+# doesn't depend on $PWD.
+_preflight_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_preflight_version_file="$(dirname "$_preflight_script_dir")/VERSION"
+if [[ -f "$_preflight_version_file" ]]; then
+  _framework_version=$(tr -d '[:space:]' < "$_preflight_version_file")
+else
+  _framework_version="unknown"
+fi
+echo "PREFLIGHT_FRAMEWORK_VERSION=${_framework_version:-unknown}"
+unset _preflight_script_dir _preflight_version_file _framework_version
+
 required_failed=0
 token=""
 scopes_body_file=""

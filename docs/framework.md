@@ -143,12 +143,27 @@ Relationship to the other commands:
 - `accounts-init.sh` creates account profiles; `accounts-describe.sh` reads them; `accounts-list.sh` enumerates them.
 - `set-project-field.sh` updates existing project profiles; `scaffold-project.sh` creates them with empty stubs; `post-apply.sh` writes form IDs into them after Terraform apply.
 
+## Versioning
+
+The framework version lives in the `VERSION` file at the repo root. A single plain-text line (`1.3.0`, `1.4.0-rc1`, etc.) so it's trivial to read from shell, from the skill, or from a CI step.
+
+Three ways to read it:
+
+- `cat "$FRAMEWORK_HOME/VERSION"` — simplest, works on a tarball.
+- `bash "$FRAMEWORK_HOME/scripts/version.sh"` → `FRAMEWORK_VERSION=<value>` — normalises whitespace, emits canonical `KEY=VALUE` output matching the rest of the framework.
+- `bash "$FRAMEWORK_HOME/scripts/preflight.sh" | grep ^PREFLIGHT_FRAMEWORK_VERSION=` — the same value as the first line of preflight's output, so parsing preflight already gives the skill a compatibility signal for free.
+
+`scaffold-project.sh` copies `VERSION` into the project root alongside the scripts and scaffold templates, so a project stays pinned to the framework revision it was scaffolded against — even if the framework install later moves ahead. The project's own `preflight.sh` reads its local `VERSION`, so `PREFLIGHT_FRAMEWORK_VERSION` reflects the scaffolded-against version, not the current framework install.
+
+**Release discipline:** bump `VERSION` as part of any PR that changes the skill-facing contract (preflight output, pre-scaffold command set, config-mutation command set). Cut a matching annotated tag (`v<VERSION>`) at merge time so the git history carries the same markers as the file.
+
 ## Preflight output reference
 
 `npm run preflight` (or `bash scripts/preflight.sh`) emits one line per check in the form `PREFLIGHT_<NAME>=<state> [detail]`. Exit 0 when every required check is ok or warn; exit 1 when any required check is missing, empty, unauthorized, forbidden, unreachable, or error. Warnings and the `PROJECT_SOURCE=missing` "first project on account" signal are non-blocking.
 
 | Check | States | Detail shape |
 |---|---|---|
+| `PREFLIGHT_FRAMEWORK_VERSION` | `<version>` \| `unknown` | Always the first line. Value comes from the `VERSION` file at the framework (or project-scaffolded) root. `unknown` when the file is absent — non-blocking; other checks continue normally. The skill uses this to verify compatibility with the expected framework revision |
 | `PREFLIGHT_TOOLS_REQUIRED` | `ok` \| `missing` | `missing` is followed by a comma-list of absent tools (`curl`, `jq`, `terraform`, `npm`). This check runs first; if any required tool is absent, preflight emits `skipped (required tools missing)` for every other contract line and exits 1 |
 | `PREFLIGHT_PROJECT_POINTER` | `ok` \| `missing` \| `incomplete` | Missing vars listed when `incomplete` (e.g. `HS_LANDER_ACCOUNT HS_LANDER_PROJECT`) |
 | `PREFLIGHT_ACCOUNT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | When `missing`: absolute path. When `incomplete`: comma-list of missing fields |

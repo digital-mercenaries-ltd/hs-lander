@@ -38,7 +38,11 @@ assert_file_contains "$TMP1/log" "^SCAFFOLD_SCRIPTS=copied" "scripts copied line
 assert_file_contains "$TMP1/log" "^SCAFFOLD_TEMPLATE=copied" "template copied line"
 assert_file_contains "$TMP1/log" "^SCAFFOLD_PROJECT_PROFILE=created" "project profile created line"
 assert_file_contains "$TMP1/log" "^SCAFFOLD_POINTER=created" "pointer created line"
+assert_file_contains "$TMP1/log" "^SCAFFOLD_VERSION=copied" "VERSION copied line"
 assert_file_contains "$TMP1/log" "^SCAFFOLD=ok$" "ok terminator"
+# VERSION is copied from framework into the project root so the project's
+# preflight.sh reports the framework version it was scaffolded against.
+assert_file_exists "$TMP1/proj/VERSION" "VERSION file copied"
 
 # Scripts actually copied
 assert_file_exists "$TMP1/proj/scripts/preflight.sh" "preflight.sh copied"
