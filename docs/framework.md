@@ -122,6 +122,27 @@ All of them respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and, 
 
 **No-clobber:** `init-project-pointer.sh` refuses to overwrite a pointer whose values differ from the requested account/project; `scaffold-project.sh` refuses to overwrite any file it would copy. Both fail loudly so the skill can surface a decision to the user rather than silently changing state.
 
+## Config-mutation commands
+
+The skill (or human operator) uses these to create and update the operational files under `~/.config/hs-lander/<account>/` without hand-writing them. All writes go to a temp file and are atomically `mv`'d into place, so an interrupted write never leaves a half-baked config.
+
+| Script | Purpose | Output | Exit |
+|---|---|---|---|
+| `scripts/accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service>` | First-time creation of an account profile (`~/.config/hs-lander/<account>/config.sh`) | `ACCOUNTS_INIT=created\|conflict\|error <detail>` | 0 on created, 1 on conflict/error |
+| `scripts/set-project-field.sh <account> <project> KEY=VALUE [...]` | Update one or more fields in an existing project profile | `SET_FIELD_UPDATED=<key>` or `SET_FIELD_APPENDED=<key>` per pair, then `SET_FIELD=ok`; or `SET_FIELD=error <reason>` | 0 on ok, 1 on error |
+
+**Credential safety:**
+
+- `accounts-init.sh` takes the Keychain *service name* as an argument and writes that reference into the config file. It never reads, writes, or otherwise touches the Keychain itself — adding the actual token is the user's manual step (`security add-generic-password …` or Keychain Access).
+- `set-project-field.sh` only accepts project-profile keys (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`). Account-level fields (including `HUBSPOT_TOKEN_KEYCHAIN_SERVICE`) are rejected with `SET_FIELD=error unknown-key <key>` — no file write happens in that case.
+
+**Validation is up-front:** `set-project-field.sh` checks every `KEY=VALUE` pair before touching the file, so one bad pair in a batch rejects the whole batch and leaves the profile unchanged.
+
+Relationship to the other commands:
+
+- `accounts-init.sh` creates account profiles; `accounts-describe.sh` reads them; `accounts-list.sh` enumerates them.
+- `set-project-field.sh` updates existing project profiles; `scaffold-project.sh` creates them with empty stubs; `post-apply.sh` writes form IDs into them after Terraform apply.
+
 ## Preflight output reference
 
 `npm run preflight` (or `bash scripts/preflight.sh`) emits one line per check in the form `PREFLIGHT_<NAME>=<state> [detail]`. Exit 0 when every required check is ok or warn; exit 1 when any required check is missing, empty, unauthorized, forbidden, unreachable, or error. Warnings and the `PROJECT_SOURCE=missing` "first project on account" signal are non-blocking.

@@ -45,6 +45,8 @@ bash tests/test-accounts-describe.sh
 bash tests/test-projects-list.sh
 bash tests/test-init-project-pointer.sh
 bash tests/test-scaffold-project.sh
+bash tests/test-accounts-init.sh
+bash tests/test-set-project-field.sh
 
 # Run deployment test against a live project (requires HubSpot creds + a deployed project directory)
 # bash tests/test-deployment.sh /path/to/project
@@ -90,9 +92,11 @@ hs-lander/
 │   ├── hs-curl.sh           ← Keychain → curl HubSpot API
 │   ├── accounts-list.sh         ← ACCOUNTS=<csv> of configured accounts (pre-scaffold)
 │   ├── accounts-describe.sh     ← ACCOUNT_* fields for a given account (pre-scaffold)
+│   ├── accounts-init.sh         ← Create a new account profile from args (config mutation)
 │   ├── projects-list.sh         ← PROJECTS=<csv> under an account (pre-scaffold)
 │   ├── init-project-pointer.sh  ← Idempotently write project.config.sh sourcing chain (pre-scaffold)
-│   └── scaffold-project.sh      ← Copy scripts + scaffold, stub project profile, write pointer (pre-scaffold)
+│   ├── scaffold-project.sh      ← Copy scripts + scaffold, stub project profile, write pointer (pre-scaffold)
+│   └── set-project-field.sh     ← Update KEY=VALUE fields in an existing project profile (config mutation)
 ├── scaffold/                ← Template for new projects
 │   ├── project.config.example.sh
 │   ├── brief-template.md
@@ -110,6 +114,8 @@ hs-lander/
 │   ├── test-projects-list.sh     ← Local, sandboxed
 │   ├── test-init-project-pointer.sh ← Local, sandboxed HS_LANDER_PROJECT_DIR
 │   ├── test-scaffold-project.sh  ← Local, end-to-end pre-scaffold flow
+│   ├── test-accounts-init.sh     ← Local, sandboxed account-profile creation
+│   ├── test-set-project-field.sh ← Local, sandboxed project-field updates
 │   └── test-deployment.sh        ← Network required, live HubSpot
 └── .github/workflows/
     └── ci.yml               ← Lint + build test + plan test (every push)
@@ -133,7 +139,12 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 - `init-project-pointer.sh <account> <project>` → `INIT_POINTER=created|present|conflict <path>`, exit 1 on conflict
 - `scaffold-project.sh <account> <project>` → copies scripts + scaffold/*, creates project profile stub under `~/.config/hs-lander/<account>/<project>.sh`, writes pointer. Emits multi-line `SCAFFOLD_*` contract ending with `SCAFFOLD=ok`. No-clobber; fails with `SCAFFOLD=error collision <path>` rather than overwriting.
 
-All pre-scaffold commands respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and `HS_LANDER_PROJECT_DIR` (default `$PWD`) for testability.
+**Config-mutation commands** (skill-driven writes to operational files, so the skill itself owns zero `Write`/`Edit` calls on `~/.config/hs-lander/`):
+
+- `accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service>` → `ACCOUNTS_INIT=created|conflict|error <detail>`. Validates account name and region; writes atomically; refuses to overwrite an existing profile. Never touches the Keychain.
+- `set-project-field.sh <account> <project> KEY=VALUE [KEY=VALUE ...]` → one `SET_FIELD_UPDATED=<key>` or `SET_FIELD_APPENDED=<key>` per pair, ending with `SET_FIELD=ok`. Allowed keys are the project-profile schema only (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`). Unknown keys — including `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` — are rejected up-front with no file write.
+
+All pre-scaffold and config-mutation commands respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and `HS_LANDER_PROJECT_DIR` (default `$PWD`) for testability.
 
 **Scaffold** is the template for new projects. A project's `terraform/main.tf` references these modules by git URL with a pinned version tag.
 
