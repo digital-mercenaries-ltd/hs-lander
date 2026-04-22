@@ -14,6 +14,7 @@ resource "restapi_object" "capture_form" {
 
   data = jsonencode({
     name      = var.capture_form_name
+    formType  = "hubspot"
     createdAt = "2024-01-01T00:00:00Z"
     fieldGroups = [
       {
@@ -74,6 +75,7 @@ resource "restapi_object" "survey_form" {
 
   data = jsonencode({
     name      = var.survey_form_name
+    formType  = "hubspot"
     createdAt = "2024-01-01T00:00:00Z"
     fieldGroups = [
       {

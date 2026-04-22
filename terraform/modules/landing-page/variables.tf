@@ -5,6 +5,11 @@ variable "hubspot_portal_id" {
   description = "HubSpot portal ID"
 }
 
+variable "project_source_property_id" {
+  type        = string
+  description = "ID of the project_source CRM property, surfaced by the account-setup module. Used as a dependency anchor so the contact list waits for the property to exist before the Lists API references it by name."
+}
+
 variable "project_slug" {
   type        = string
   description = "Short project identifier (e.g. my-project). Used for resource naming and contact segmentation."

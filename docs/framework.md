@@ -77,6 +77,8 @@ Run once per HubSpot account. Creates the `project_source` CRM contact property 
 
 Run per project. Creates: capture form, optional survey form, landing page, thank-you page, welcome email, contact list, and optional custom CRM properties.
 
+Required input: `project_source_property_id = module.account_setup.project_source_property_id`. This wires the list resource's creation order behind the `project_source` property so apply cannot race them. Without this the Lists API rejects the filter payload with `The following properties did not exist for the object: project_source`.
+
 Both modules use the Mastercard/restapi provider (~1.19) and inherit the provider configuration from the consuming project's root module.
 
 ## Authentication
