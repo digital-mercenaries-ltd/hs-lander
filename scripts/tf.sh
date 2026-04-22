@@ -3,8 +3,7 @@
 # Usage: scripts/tf.sh init|plan|apply|destroy [extra-args...]
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
 # shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"

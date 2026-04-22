@@ -12,6 +12,12 @@
 # Output format: each check prints a single line of the form
 #   PREFLIGHT_<NAME>=ok|missing|error|warn|skipped [detail]
 #
+# Project directory resolution:
+# - PROJECT_DIR is $PWD by default, or $HS_LANDER_PROJECT_DIR if set. Invoke
+#   from the project directory, or export the env var in automation. The script
+#   location is NOT used — the framework install and the consuming project are
+#   separate directories.
+#
 # Credential safety:
 # - The HubSpot token is read from Keychain into a local shell variable, used
 #   for the API tests, and unset via EXIT trap. It never appears on stdout,
@@ -22,8 +28,7 @@
 #   curl line including the Authorization header.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
 required_failed=0
 token=""
