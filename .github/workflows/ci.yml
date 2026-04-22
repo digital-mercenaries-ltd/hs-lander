@@ -88,3 +88,9 @@ jobs:
 
       - name: Run test-scaffold-project.sh
         run: bash tests/test-scaffold-project.sh
+
+      - name: Run test-accounts-init.sh
+        run: bash tests/test-accounts-init.sh
+
+      - name: Run test-set-project-field.sh
+        run: bash tests/test-set-project-field.sh

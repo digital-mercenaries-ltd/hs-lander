@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# test-set-project-field.sh — Validates scripts/set-project-field.sh updates
+# project profiles safely: rewrite-in-place, append, reject unknown keys,
+# reject non-existent profile, idempotent re-runs, atomic write, and
+# quoting round-trip.
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$REPO_DIR/tests/fixtures/test-helper.sh"
+
+echo "=== test-set-project-field.sh ==="
+
+SCRIPT="$REPO_DIR/scripts/set-project-field.sh"
+assert_file_exists "$SCRIPT" "scripts/set-project-field.sh exists"
+
+seed_profile() {
+  local dir="$1"
+  mkdir -p "$dir/dml"
+  cat > "$dir/dml/heard.sh" <<'EOF'
+PROJECT_SLUG="heard"
+DOMAIN="old.example.com"
+DM_UPLOAD_PATH="/old"
+GA4_MEASUREMENT_ID=""
+CAPTURE_FORM_ID=""
+SURVEY_FORM_ID=""
+LIST_ID=""
+EOF
+}
+
+run() {
+  local cfg="$1"; shift
+  local log="$1"; shift
+  HS_LANDER_CONFIG_DIR="$cfg" bash "$SCRIPT" "$@" >"$log" 2>&1
+  echo "$?"
+}
+
+# --- Scenario 1: update existing key ---
+echo ""
+echo "--- Scenario 1: update existing key ---"
+TMP1=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}"' EXIT
+seed_profile "$TMP1"
+exit1=$(run "$TMP1" "$TMP1/log" dml heard DOMAIN="heard.example.com" || true)
+assert_equal "$exit1" "0" "exit 0 on update"
+assert_file_contains "$TMP1/log" "^SET_FIELD_UPDATED=DOMAIN$" "update reported"
+assert_file_contains "$TMP1/log" "^SET_FIELD=ok$" "ok terminator"
+assert_file_contains "$TMP1/dml/heard.sh" '^DOMAIN="heard\.example\.com"$' "new DOMAIN written"
+# Other fields untouched
+assert_file_contains "$TMP1/dml/heard.sh" '^PROJECT_SLUG="heard"$' "PROJECT_SLUG unchanged"
+assert_file_contains "$TMP1/dml/heard.sh" '^DM_UPLOAD_PATH="/old"$' "DM_UPLOAD_PATH unchanged"
+# No duplicate DOMAIN line
+domain_count=$(grep -c '^DOMAIN=' "$TMP1/dml/heard.sh")
+assert_equal "$domain_count" "1" "no duplicate DOMAIN line"
+# File stays at 7 lines
+line_count=$(wc -l < "$TMP1/dml/heard.sh" | tr -d ' ')
+assert_equal "$line_count" "7" "file still 7 lines"
+
+# --- Scenario 2: append new key (not previously in file) ---
+echo ""
+echo "--- Scenario 2: append new key ---"
+TMP2=$(mktemp -d)
+mkdir -p "$TMP2/dml"
+cat > "$TMP2/dml/heard.sh" <<'EOF'
+PROJECT_SLUG="heard"
+EOF
+exit2=$(run "$TMP2" "$TMP2/log" dml heard GA4_MEASUREMENT_ID="G-ABC123" || true)
+assert_equal "$exit2" "0" "exit 0 on append"
+assert_file_contains "$TMP2/log" "^SET_FIELD_APPENDED=GA4_MEASUREMENT_ID$" "append reported"
+assert_file_contains "$TMP2/dml/heard.sh" '^GA4_MEASUREMENT_ID="G-ABC123"$' "new field appended"
+
+# --- Scenario 3: multiple pairs in one invocation ---
+echo ""
+echo "--- Scenario 3: multiple pairs in one invocation ---"
+TMP3=$(mktemp -d)
+seed_profile "$TMP3"
+exit3=$(run "$TMP3" "$TMP3/log" dml heard \
+  DOMAIN="heard.new.com" \
+  DM_UPLOAD_PATH="/heard" \
+  GA4_MEASUREMENT_ID="G-XYZ789" \
+  || true)
+assert_equal "$exit3" "0" "exit 0 with multiple pairs"
+assert_file_contains "$TMP3/log" "^SET_FIELD_UPDATED=DOMAIN$" "DOMAIN reported"
+assert_file_contains "$TMP3/log" "^SET_FIELD_UPDATED=DM_UPLOAD_PATH$" "DM_UPLOAD_PATH reported"
+assert_file_contains "$TMP3/log" "^SET_FIELD_UPDATED=GA4_MEASUREMENT_ID$" "GA4 reported"
+assert_file_contains "$TMP3/dml/heard.sh" '^DOMAIN="heard\.new\.com"$' "DOMAIN value updated"
+assert_file_contains "$TMP3/dml/heard.sh" '^DM_UPLOAD_PATH="/heard"$' "DM_UPLOAD_PATH value updated"
+assert_file_contains "$TMP3/dml/heard.sh" '^GA4_MEASUREMENT_ID="G-XYZ789"$' "GA4 value updated"
+
+# --- Scenario 4: unknown key → rejected, file untouched ---
+echo ""
+echo "--- Scenario 4: unknown key rejected ---"
+TMP4=$(mktemp -d)
+seed_profile "$TMP4"
+before=$(cat "$TMP4/dml/heard.sh")
+exit4=$(run "$TMP4" "$TMP4/log" dml heard \
+  DOMAIN="ok.example.com" \
+  HUBSPOT_TOKEN_KEYCHAIN_SERVICE="oops-credential-field" \
+  || true)
+assert_equal "$exit4" "1" "exit 1 on unknown key"
+assert_file_contains "$TMP4/log" "^SET_FIELD=error unknown-key HUBSPOT_TOKEN_KEYCHAIN_SERVICE$" "unknown-key reported by name"
+after=$(cat "$TMP4/dml/heard.sh")
+assert_equal "$after" "$before" "file untouched — up-front validation rejected the whole batch"
+
+# --- Scenario 5: non-existent profile ---
+echo ""
+echo "--- Scenario 5: missing profile ---"
+TMP5=$(mktemp -d)
+exit5=$(run "$TMP5" "$TMP5/log" nope missing GA4_MEASUREMENT_ID=G-1 || true)
+assert_equal "$exit5" "1" "exit 1 when profile missing"
+assert_file_contains "$TMP5/log" "^SET_FIELD=error profile-missing" "profile-missing reported"
+
+# --- Scenario 6: invalid pair (no equals sign) ---
+echo ""
+echo "--- Scenario 6: invalid pair ---"
+TMP6=$(mktemp -d)
+seed_profile "$TMP6"
+exit6=$(run "$TMP6" "$TMP6/log" dml heard "bareword-no-equals" || true)
+assert_equal "$exit6" "1" "exit 1 on invalid pair"
+assert_file_contains "$TMP6/log" "^SET_FIELD=error invalid-pair" "invalid-pair reported"
+
+# --- Scenario 7: idempotent re-run (set to current value) → file unchanged ---
+echo ""
+echo "--- Scenario 7: idempotent update ---"
+TMP7=$(mktemp -d)
+seed_profile "$TMP7"
+# Prime: set DOMAIN to a known value
+run "$TMP7" "$TMP7/log" dml heard DOMAIN="same.example.com" >/dev/null
+hash_before=$(shasum "$TMP7/dml/heard.sh" | awk '{print $1}')
+# Re-set to the same value
+exit7=$(run "$TMP7" "$TMP7/log2" dml heard DOMAIN="same.example.com" || true)
+assert_equal "$exit7" "0" "exit 0 on idempotent re-set"
+hash_after=$(shasum "$TMP7/dml/heard.sh" | awk '{print $1}')
+assert_equal "$hash_after" "$hash_before" "file content identical when value unchanged"
+
+# --- Scenario 8: value with shell metacharacters round-trips ---
+echo ""
+echo "--- Scenario 8: quoting round-trip ---"
+TMP8=$(mktemp -d)
+seed_profile "$TMP8"
+# Use a value with spaces, dots, and an asterisk. Plain shell metacharacters
+# are enough — we don't need to stress-test embedded double-quotes here.
+exit8=$(run "$TMP8" "$TMP8/log" dml heard DOMAIN="some host *.example.com" || true)
+assert_equal "$exit8" "0" "exit 0 with metacharacter value"
+assert_file_contains "$TMP8/dml/heard.sh" '^DOMAIN="some host \*\.example\.com"$' "value written with canonical quotes"
+# Round-trip through source
+(
+  # shellcheck source=/dev/null
+  source "$TMP8/dml/heard.sh"
+  [[ "$DOMAIN" == "some host *.example.com" ]] || exit 10
+) && rt=ok || rt=fail
+assert_equal "$rt" "ok" "sourced value matches what we set (glob not expanded)"
+
+test_summary
