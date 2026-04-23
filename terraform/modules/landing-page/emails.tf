@@ -1,7 +1,7 @@
 # terraform/modules/landing-page/emails.tf
 #
 # HubSpot Marketing Email API v3 quirks (discovered via live probing against
-# portal 147959629, 2026-04-22):
+# portal 147959629, 2026-04-22 through 2026-04-23):
 #
 # - `type = "REGULAR"` gets coerced to "BATCH_EMAIL" (unsendable); use
 #   "AUTOMATED_EMAIL" with subcategory = "automated" for a workflow-triggered
@@ -17,22 +17,35 @@
 #   subcategory/emailTemplateMode changes with "Cannot schedule or publish an
 #   email via the update API. Use the publish API instead." Therefore the
 #   update payload (`update_data`) must omit those fields. Create payload
-#   (`data`) keeps them so POST publishes the email at creation time.
+#   (`data`) sends the non-transition state so POST succeeds on a fresh email.
+# - POST cannot create an email directly in AUTOMATED state. HubSpot rejects
+#   with "Creating an email in the published state AUTOMATED is not allowed.
+#   Consider using the DRAFT state AUTOMATED_DRAFT." The create-and-publish
+#   flow is a two-step sequence:
+#     1. POST /marketing/v3/emails with state = "AUTOMATED_DRAFT",
+#        isPublished = false.
+#     2. POST /marketing/v3/emails/{id}/publish to promote to AUTOMATED.
+#   The `terraform_data.publish_welcome_email` resource below runs step 2
+#   via local-exec on create and on every recreate (triggers_replace keyed
+#   on the email's ID). The publish endpoint is idempotent, so calling it
+#   against an already-published email is a no-op — safe on the recreate
+#   path after `terraform taint`.
 resource "restapi_object" "welcome_email" {
   path          = "/marketing/v3/emails"
   id_attribute  = "id"
   update_method = "PATCH"
 
-  # POST payload — publishes the email at creation time.
+  # POST payload — creates the email as a draft. Publishing happens in the
+  # separate `terraform_data.publish_welcome_email` step below.
   data = jsonencode({
     name              = var.email_name
     subject           = var.email_subject
     type              = "AUTOMATED_EMAIL"
     subcategory       = "automated"
-    state             = "AUTOMATED"
+    state             = "AUTOMATED_DRAFT"
     emailTemplateMode = "DRAG_AND_DROP"
     language          = var.email_language
-    isPublished       = true
+    isPublished       = false
     isTransactional   = false
 
     from = {
@@ -97,4 +110,24 @@ resource "restapi_object" "welcome_email" {
       suppressGraymail   = false
     }
   })
+}
+
+# Publish step. Fires via local-exec when the welcome_email is first created
+# and whenever it's recreated (triggers_replace keyed on the email's ID).
+# `hs-curl.sh` reads the HubSpot token from Keychain, so no credential
+# appears in the terraform execution environment. `HS_LANDER_PROJECT_DIR`
+# is exported by `scripts/tf.sh` before it invokes terraform, so the
+# provisioner inherits it.
+#
+# The publish endpoint is idempotent — a POST to /publish on an already-
+# published email is a no-op, so the replace-triggered rerun after a
+# manual taint is safe.
+resource "terraform_data" "publish_welcome_email" {
+  triggers_replace = [restapi_object.welcome_email.id]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      bash "$HS_LANDER_PROJECT_DIR/scripts/hs-curl.sh" POST "/marketing/v3/emails/${restapi_object.welcome_email.id}/publish"
+    EOT
+  }
 }

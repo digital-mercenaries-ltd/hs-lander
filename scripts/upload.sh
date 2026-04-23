@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # upload.sh — Upload dist/ files to HubSpot Design Manager via CMS Source Code API.
 # No HubSpot CLI or PAK needed — uses Service Key from Keychain.
+#
+# API v3 source-code environments: the path after /source-code/ must be one
+# of {draft, published}. The older `developer` environment (used by legacy
+# HubSpot CLI internals) is no longer valid and returns HTTP 415
+# "Environment specified in path 'developer' is invalid". We publish directly
+# (consumers rely on `npm run deploy` going live); a draft workflow could
+# live on a future --draft flag if needed.
 set -euo pipefail
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
@@ -24,7 +31,7 @@ HUBSPOT_TOKEN=$(security find-generic-password \
   exit 1
 }
 
-API_BASE="https://api.hubapi.com/cms/v3/source-code/developer/content"
+API_BASE="https://api.hubapi.com/cms/v3/source-code/published/content"
 
 # Upload each file in dist/.
 # Use process substitution (not pipe) so counters stay in the parent shell.

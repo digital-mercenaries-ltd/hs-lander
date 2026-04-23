@@ -28,6 +28,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-23-v1.6.2-heard-apply-round-2.md | Complete | v1.6.2 |
 | 2026-04-23-v1.6.3-forms-privacy-text.md | Complete | v1.6.3 |
 | 2026-04-23-v1.6.4-forms-field-group-cap.md | Complete | v1.6.4 |
+| 2026-04-23-v1.6.5-email-publish-and-upload-endpoint.md | Complete | v1.6.5 |
 
 ### In-flight
 
