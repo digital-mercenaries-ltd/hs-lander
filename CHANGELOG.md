@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.6.5 (2026-04-23)
+
+Patch — two source fixes surfaced when Heard deployed against v1.6.4. No module input changes; one new `terraform_data` resource inside the `landing-page` module (see migration below); one one-line script path change.
+
+### Fixed
+
+- **Welcome-email POST rejected `state = "AUTOMATED"`.** HubSpot's Marketing Email API v3 requires automated emails be created as `AUTOMATED_DRAFT` and promoted to `AUTOMATED` via a separate `POST /marketing/v3/emails/{id}/publish` call. v1.6.0 shipped the "correct" final state in the create payload because the only portal we probed had a pre-existing published email — the create path wasn't exercised end-to-end. Fresh POST now returns `Creating an email in the published state AUTOMATED is not allowed. Consider using the DRAFT state AUTOMATED_DRAFT.` Heard's `terraform taint` + apply destroyed the stuck pre-v1.6.0 email and failed to create the replacement, leaving the portal with no welcome email at all. Create payload now sends `state = "AUTOMATED_DRAFT"` / `isPublished = false`; a new `terraform_data.publish_welcome_email` resource fires `POST /publish` via `scripts/hs-curl.sh` after the email resource lands, promoting it to `AUTOMATED`. The provisioner's `triggers_replace` is keyed on the email's ID so it re-runs after a `terraform taint` recreate. Publish endpoint is idempotent — safe to re-run against an already-published email.
+- **`npm run deploy` 8/8 uploads failed with HTTP 415.** `scripts/upload.sh:27` hard-coded the endpoint as `.../cms/v3/source-code/developer/content`. The `developer` environment isn't a valid source-code environment in CMS v3 — must be `draft` or `published`. Changed to `/published/content` (direct-to-live matches the current `npm run deploy` contract; a `--draft` mode could be added later). Header comment notes the valid values.
+
+### Migration
+
+Re-pin `?ref=v1.6.4` → `?ref=v1.6.5` and run `npm run tf:init -- -upgrade && npm run tf:plan`. Expected:
+
+- **`terraform_data.publish_welcome_email`: CREATE** — this is a new resource inside the `landing-page` module; every consumer sees it on the first apply under v1.6.5 regardless of whether they already have a published email. If the email already exists and is already `AUTOMATED`, the provisioner's `POST /publish` is a no-op (idempotent endpoint) — safe.
+- `welcome_email`: no-op if your email resource is intact; CREATE if you're on a post-taint path (the old stuck email was destroyed under a previous version but the replacement didn't land because of this bug).
+- No other resource movement.
+
+**`scripts/upload.sh` lives in each project's checked-out copy** — projects scaffolded against earlier versions need the updated `upload.sh`. Until a `hs-lander-refresh-scripts` command lands (roadmap), manually copy `scripts/upload.sh` from `$FRAMEWORK_HOME/scripts/upload.sh` into the project. Alternatively, apply the one-line change (`/developer/content` → `/published/content`) in place.
+
 ## v1.6.4 (2026-04-23)
 
 Patch — HubSpot Forms v3 caps each `fieldGroup` at 3 fields (`FormFieldError.FIELD_GROUP_TOO_MANY_FIELDS`). Surfaced by Heard's survey with 4 questions (email + 4 + project_source = 6 fields in one group). Internal payload restructure; no module input changes.
