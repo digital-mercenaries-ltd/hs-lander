@@ -4,6 +4,13 @@
 set -euo pipefail
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
+# Export so terraform local-exec provisioners (e.g.
+# landing-page/emails.tf → terraform_data.publish_welcome_email) inherit
+# the resolved value. Without this, a naked `npm run tf:plan` where the
+# caller never set HS_LANDER_PROJECT_DIR would leave the variable empty
+# in terraform's environment and any provisioner referencing it would
+# point at /scripts/... instead of $PROJECT_DIR/scripts/...
+export HS_LANDER_PROJECT_DIR="$PROJECT_DIR"
 
 # shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
