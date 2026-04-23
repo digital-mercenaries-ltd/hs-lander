@@ -60,6 +60,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | v1.6.1 | — | Mastercard/restapi provider constraint `~> 1.19` → `~> 2.0` in all three files that declare it. v1.6.0's `ignore_all_server_changes` attribute requires provider 2.0.0+; the v1.19 cap made it unusable. No module contract changes. |
 | v1.6.2 | — | Heard v1.6.1 apply drift: `survey_form` missed `fieldType` normalisation (`hidden` → `single_line_text`); both forms' `richTextType = "NONE"` rejected by v3 (`→ "text"`); `landing_page` PATCH hit `PAGE_EXISTS` on `slug=""` collisions (→ `data`/`update_data` split mirroring the v1.6.0 email pattern — `slug`/`domain`/`state` dropped from PATCH). Plus a documented `terraform taint` recovery for pre-v1.6.0 emails stuck in `BATCH_EMAIL`/`DRAFT`. |
 | v1.6.3 | — | Forms v3 now requires `legalConsentOptions.privacyText` when `type = "implicit_consent_to_process"` (`Some required fields were not set: [privacyText]`). New `privacy_text` module variable with a GDPR-adequate default; wired into both `capture_form` and `survey_form`. No breaking change; consumers pick up the default automatically. |
+| v1.6.4 | — | Forms v3 caps each `fieldGroup` at 3 fields (`FIELD_GROUP_TOO_MANY_FIELDS`). Both forms now split payload into three group categories: email-only, user fields via `chunklist(..., 3)`, and a segmentation group for `project_source`. No module input changes; existing live forms see an in-place UPDATE with form ID preserved. |
 
 ---
 

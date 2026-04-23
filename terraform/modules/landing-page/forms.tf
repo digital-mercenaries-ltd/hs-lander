@@ -25,6 +25,12 @@
 #   rich-text metadata" which is a no-op when no rich-text content is
 #   present. Removing the key entirely is not safe: v3 schema flags it
 #   required on field groups.
+# - Each fieldGroup is capped at 3 fields in v3 (rejected with
+#   FIELD_GROUP_TOO_MANY_FIELDS). We emit three categories of groups per
+#   form: one email group (always), one or more user-field groups built
+#   by chunklist(..., 3) on the module input (zero groups when the input
+#   is empty), and one segmentation group carrying project_source. Don't
+#   collapse these back into a single group — 4+ fields will fail.
 
 resource "restapi_object" "capture_form" {
   path          = "/marketing/v3/forms"
@@ -35,13 +41,13 @@ resource "restapi_object" "capture_form" {
     name      = var.capture_form_name
     formType  = "hubspot"
     createdAt = "2024-01-01T00:00:00Z"
-    fieldGroups = [
-      {
-        groupType    = "default_group"
-        richTextType = "text"
-        fields = concat(
-          # Email field (always present, with required validation block)
-          [
+    fieldGroups = concat(
+      # 1. Email group — gateway field, single-field group.
+      [
+        {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
             {
               name         = "email"
               label        = "Email"
@@ -55,19 +61,34 @@ resource "restapi_object" "capture_form" {
                 }
               }
             }
-          ],
-          # Additional fields (no validation block for non-email)
-          [for field in var.capture_form_fields : {
-            name         = field.name
-            label        = field.label
-            fieldType    = field.type
-            objectTypeId = "0-1"
-            required     = field.required
-          }],
-          # project_source segmentation field — hidden in the rendered form
-          # via CSS (see scaffold/src/css/main.css). Kept as
-          # single_line_text because Forms v3 rejects fieldType = "hidden".
-          [
+          ]
+        }
+      ],
+      # 2. User-field groups — chunked at 3 to respect v3's per-group cap.
+      #    Empty when var.capture_form_fields is []; no group emitted.
+      [
+        for chunk in chunklist(var.capture_form_fields, 3) : {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
+            for field in chunk : {
+              name         = field.name
+              label        = field.label
+              fieldType    = field.type
+              objectTypeId = "0-1"
+              required     = field.required
+            }
+          ]
+        }
+      ],
+      # 3. Segmentation group — project_source, hidden in the rendered
+      #    form via scaffold CSS. Kept as single_line_text because
+      #    Forms v3 rejects fieldType = "hidden".
+      [
+        {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
             {
               name         = "project_source"
               label        = "Project Source"
@@ -76,9 +97,9 @@ resource "restapi_object" "capture_form" {
               defaultValue = var.project_slug
             }
           ]
-        )
-      }
-    ]
+        }
+      ]
+    )
     legalConsentOptions = {
       type        = "implicit_consent_to_process"
       privacyText = var.privacy_text
@@ -99,12 +120,13 @@ resource "restapi_object" "survey_form" {
     name      = var.survey_form_name
     formType  = "hubspot"
     createdAt = "2024-01-01T00:00:00Z"
-    fieldGroups = [
-      {
-        groupType    = "default_group"
-        richTextType = "text"
-        fields = concat(
-          [
+    fieldGroups = concat(
+      # 1. Email group — gateway field, single-field group.
+      [
+        {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
             {
               name         = "email"
               label        = "Email"
@@ -118,18 +140,34 @@ resource "restapi_object" "survey_form" {
                 }
               }
             }
-          ],
-          [for field in var.survey_fields : {
-            name         = field.name
-            label        = field.label
-            fieldType    = field.type
-            objectTypeId = "0-1"
-            required     = field.required
-          }],
-          # project_source segmentation field — hidden in the rendered form
-          # via CSS (see scaffold/src/css/main.css). Kept as
-          # single_line_text because Forms v3 rejects fieldType = "hidden".
-          [
+          ]
+        }
+      ],
+      # 2. User-field groups — chunked at 3 to respect v3's per-group cap.
+      #    Empty when var.survey_fields is []; no group emitted.
+      [
+        for chunk in chunklist(var.survey_fields, 3) : {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
+            for field in chunk : {
+              name         = field.name
+              label        = field.label
+              fieldType    = field.type
+              objectTypeId = "0-1"
+              required     = field.required
+            }
+          ]
+        }
+      ],
+      # 3. Segmentation group — project_source, hidden in the rendered
+      #    form via scaffold CSS. Kept as single_line_text because
+      #    Forms v3 rejects fieldType = "hidden".
+      [
+        {
+          groupType    = "default_group"
+          richTextType = "text"
+          fields = [
             {
               name         = "project_source"
               label        = "Project Source"
@@ -138,9 +176,9 @@ resource "restapi_object" "survey_form" {
               defaultValue = var.project_slug
             }
           ]
-        )
-      }
-    ]
+        }
+      ]
+    )
     legalConsentOptions = {
       type        = "implicit_consent_to_process"
       privacyText = var.privacy_text

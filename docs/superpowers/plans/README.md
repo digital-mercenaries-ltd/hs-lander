@@ -27,6 +27,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-22-v1.6.1-provider-version-bump.md | Complete | v1.6.1 |
 | 2026-04-23-v1.6.2-heard-apply-round-2.md | Complete | v1.6.2 |
 | 2026-04-23-v1.6.3-forms-privacy-text.md | Complete | v1.6.3 |
+| 2026-04-23-v1.6.4-forms-field-group-cap.md | Complete | v1.6.4 |
 
 ### In-flight
 
