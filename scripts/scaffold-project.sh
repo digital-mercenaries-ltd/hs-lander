@@ -14,8 +14,12 @@
 #   SCAFFOLD=ok
 # On failure: SCAFFOLD=error <reason>, exit 1.
 #
-# Does NOT generate brand-specific content (HTML, CSS, SVGs, brief.md).
-# That remains the skill's responsibility.
+# Ships scaffold/src/ as working framework defaults (HubL templates, dark-mode
+# CSS, welcome-email anatomy) so a fresh project can `npm run build && npm run
+# deploy` immediately for dogfooding. The skill overwrites with brand-specific
+# copy and brand tokens (__PRIMARY_ACCENT__, __BRAND_NAME__, __PRIMARY_CTA_URL__)
+# during its workflow. Brand-specific content remains the skill's responsibility;
+# scaffold defaults exist purely so plumbing tests work pre-skill.
 set -euo pipefail
 
 if [[ $# -lt 2 || -z "${1:-}" || -z "${2:-}" ]]; then
@@ -118,7 +122,12 @@ LIST_ID=""
 # See docs/framework.md "Hosting modes" for how to configure each mode.
 LANDING_SLUG=""
 THANKYOU_SLUG="thank-you"
-HOSTING_MODE_HINT=""
+
+# Email + landing-page module flags (v1.7.0). All have module defaults that
+# preserve v1.6.7 behaviour; uncomment + set when you want to override.
+# EMAIL_PREVIEW_TEXT=""             # Inbox preview line; empty disables the preview_text widget
+# AUTO_PUBLISH_WELCOME_EMAIL=true   # Skill flips to false on Starter portals (publish endpoint scope-gated)
+# INCLUDE_BOTTOM_CTA=true           # Advisory metadata only — scaffold ships bottom CTA always-on; opt out by editing the template
 EOF
   echo "SCAFFOLD_PROJECT_PROFILE=created $project_profile"
 fi

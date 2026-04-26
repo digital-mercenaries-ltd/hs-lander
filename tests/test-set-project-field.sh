@@ -213,29 +213,59 @@ HS_LANDER_CONFIG_DIR="$TMP11" bash "$SCRIPT" dml heard DOMAIN=clean.example.com 
 stale=$(find "$TMP11/dml" -maxdepth 1 -name 'heard.sh.tmp.*' | wc -l | tr -d ' ')
 assert_equal "$stale" "0" "no stale .tmp.* files in account dir after success"
 
-# --- Scenario 12: v1.5.0 allow-list extensions accepted ---
-# LANDING_SLUG, THANKYOU_SLUG, HOSTING_MODE_HINT, HUBSPOT_SUBSCRIPTION_ID,
-# HUBSPOT_OFFICE_LOCATION_ID all landed as allowed keys in v1.5.0 for the
-# hosting-modes + marketing-email plumbing. HUBSPOT_TOKEN_KEYCHAIN_SERVICE
+# --- Scenario 12: v1.5.0 hosting-modes / subscription allow-list extensions ---
+# LANDING_SLUG, THANKYOU_SLUG, HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID
+# landed in v1.5.0. HOSTING_MODE_HINT was on the v1.5.0 allow-list but removed
+# in v1.7.0 (skill-only state, lives in <project>.skillstate.sh now —
+# Scenario 14 verifies the rejection). HUBSPOT_TOKEN_KEYCHAIN_SERVICE
 # remains rejected (Scenario 4 still covers that).
 echo ""
-echo "--- Scenario 12: v1.5.0 allow-list extensions ---"
+echo "--- Scenario 12: v1.5.0 hosting-modes / subscription keys ---"
 TMP12=$(mktemp -d)
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}" "${TMP12:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}" "${TMP12:-}" "${TMP13:-}" "${TMP14:-}"' EXIT
 seed_profile "$TMP12"
 exit12=$(run "$TMP12" "$TMP12/log" dml heard \
   LANDING_SLUG="heard" \
   THANKYOU_SLUG="thanks" \
-  HOSTING_MODE_HINT="redirect" \
   HUBSPOT_SUBSCRIPTION_ID="2269639338" \
   HUBSPOT_OFFICE_LOCATION_ID="375327044798" \
   || true)
-assert_equal "$exit12" "0" "exit 0 with all v1.5.0 keys"
+assert_equal "$exit12" "0" "exit 0 with v1.5.0 hosting-modes / subscription keys"
 assert_file_contains "$TMP12/log" "^SET_FIELD=ok$" "ok terminator emitted"
 assert_file_contains "$TMP12/dml/heard.sh" '^LANDING_SLUG="heard"$' "LANDING_SLUG written"
 assert_file_contains "$TMP12/dml/heard.sh" '^THANKYOU_SLUG="thanks"$' "THANKYOU_SLUG written"
-assert_file_contains "$TMP12/dml/heard.sh" '^HOSTING_MODE_HINT="redirect"$' "HOSTING_MODE_HINT written"
 assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_SUBSCRIPTION_ID="2269639338"$' "HUBSPOT_SUBSCRIPTION_ID written"
 assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_OFFICE_LOCATION_ID="375327044798"$' "HUBSPOT_OFFICE_LOCATION_ID written"
+
+# --- Scenario 13: v1.7.0 allow-list extensions accepted ---
+# EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL, INCLUDE_BOTTOM_CTA all
+# added in v1.7.0 for the welcome-email anatomy and tier-aware publish gate.
+echo ""
+echo "--- Scenario 13: v1.7.0 allow-list extensions ---"
+TMP13=$(mktemp -d)
+seed_profile "$TMP13"
+exit13=$(run "$TMP13" "$TMP13/log" dml heard \
+  EMAIL_PREVIEW_TEXT="You are in. Reply with one word: ready or curious." \
+  AUTO_PUBLISH_WELCOME_EMAIL="false" \
+  INCLUDE_BOTTOM_CTA="true" \
+  || true)
+assert_equal "$exit13" "0" "exit 0 with v1.7.0 keys"
+assert_file_contains "$TMP13/log" "^SET_FIELD=ok$" "[Scenario 13] ok terminator emitted"
+assert_file_contains "$TMP13/dml/heard.sh" '^EMAIL_PREVIEW_TEXT="You are in. Reply with one word: ready or curious.\"$' "EMAIL_PREVIEW_TEXT written"
+assert_file_contains "$TMP13/dml/heard.sh" '^AUTO_PUBLISH_WELCOME_EMAIL="false"$' "AUTO_PUBLISH_WELCOME_EMAIL written"
+assert_file_contains "$TMP13/dml/heard.sh" '^INCLUDE_BOTTOM_CTA="true"$' "INCLUDE_BOTTOM_CTA written"
+
+# --- Scenario 14: HOSTING_MODE_HINT rejected (v1.7.0 removal) ---
+# HOSTING_MODE_HINT was removed from the allow-list in v1.7.0 because the
+# skill now stores hosting-mode state in <project>.skillstate.sh outside
+# the framework's project profile. Verify the rejection so a stale skill
+# clinging to the old key fails loudly rather than silently writing nothing.
+echo ""
+echo "--- Scenario 14: HOSTING_MODE_HINT rejected (v1.7.0) ---"
+TMP14=$(mktemp -d)
+seed_profile "$TMP14"
+exit14=$(run "$TMP14" "$TMP14/log" dml heard HOSTING_MODE_HINT="redirect" || true)
+assert_equal "$exit14" "1" "[Scenario 14] exit 1 when HOSTING_MODE_HINT is set"
+assert_file_contains "$TMP14/log" "^SET_FIELD=error unknown-key HOSTING_MODE_HINT$" "[Scenario 14] unknown-key error emitted"
 
 test_summary

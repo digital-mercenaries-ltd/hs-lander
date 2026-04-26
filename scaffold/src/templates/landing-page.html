@@ -1,0 +1,55 @@
+{# templateType: page #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{{ page_meta.html_title|default:"__BRAND_NAME__" }}</title>
+  {{ standard_header_includes }}
+  <link rel="stylesheet" href="{{ get_asset_url('__DM_PATH__/css/main.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="site-brand" href="https://__DOMAIN__/">__BRAND_NAME__</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>__BRAND_NAME__</h1>
+      <p class="lede">Replace this lede with the project's one-line value prop.</p>
+      <div id="signup-form" class="signup-form"></div>
+    </section>
+
+    <section class="body-content">
+      <p>Replace this section with the project's primary body copy. Skill-driven scaffolding overwrites it; the placeholder is here so <code>npm run build</code> succeeds before brand content lands.</p>
+    </section>
+
+    <section class="cta-bottom">
+      <h2>Ready when you are.</h2>
+      <div id="signup-form-bottom" class="signup-form"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <small>© __BRAND_NAME__</small>
+  </footer>
+
+  <script>
+    hbspt.forms.create({
+      region: '__REGION__',
+      portalId: '__PORTAL_ID__',
+      formId: '__CAPTURE_FORM_ID__',
+      target: '#signup-form'
+    });
+    hbspt.forms.create({
+      region: '__REGION__',
+      portalId: '__PORTAL_ID__',
+      formId: '__CAPTURE_FORM_ID__',
+      target: '#signup-form-bottom'
+    });
+  </script>
+  <script src="{{ get_asset_url('__DM_PATH__/js/tracking.js') }}"></script>
+  {{ standard_footer_includes }}
+</body>
+</html>

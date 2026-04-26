@@ -108,6 +108,24 @@ variable "email_language" {
   description = "Email language code (e.g. en-gb, en-us, fr, de)."
 }
 
+variable "email_preview_text" {
+  type        = string
+  default     = ""
+  description = "Inbox preview line shown after the subject in Gmail / Apple Mail / Outlook. ~85-110 chars ideal. Empty string emits an empty preview_text widget; HubSpot tolerates this and the client falls back to the first body line."
+}
+
+variable "auto_publish_welcome_email" {
+  type        = bool
+  default     = true
+  description = "Whether to automatically publish the welcome email post-create via the publish_welcome_email terraform_data resource. Default true preserves v1.6.5+ behaviour for Pro+ portals where the publish endpoint requires marketing-email scope. Set to false on Starter portals (the publish API endpoint is unavailable, scope is gated by tier); the email goes to UI-publish manually after deploy. Skill flips this via set-project-field.sh AUTO_PUBLISH_WELCOME_EMAIL=false when preflight detects Starter."
+}
+
+variable "include_bottom_cta" {
+  type        = bool
+  default     = true
+  description = "Advisory metadata only — scaffold templates ship a bottom CTA always-on; consumers opt out by editing src/templates/landing-page.html. The variable is plumbed through tf.sh and the project profile so the skill can record consumer intent without needing a templating engine in build.sh."
+}
+
 variable "hubspot_subscription_id" {
   type        = string
   description = "HubSpot subscription ID for the welcome email. Look up in HubSpot UI: Settings → Marketing → Email → Subscription Types. Per-portal value."

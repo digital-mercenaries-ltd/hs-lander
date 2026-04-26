@@ -1,0 +1,142 @@
+/*
+ * scaffold/src/css/main.css — design-token-based styles with prefers-color-scheme.
+ *
+ * Token system: all component rules reference --* custom properties on :root,
+ * never raw colours. The @media (prefers-color-scheme: dark) block flips the
+ * tokens; component rules stay unchanged. Adapt component rules freely; do
+ * not let raw colour literals escape into them or dark-mode breaks.
+ *
+ * Brand-specific tokens (__PRIMARY_ACCENT__, __PRIMARY_ACCENT_ON__, etc.) are
+ * substituted at scaffold time by the skill, NOT by build.sh's sed pass.
+ * build.sh's substitution list does not include these tokens; they're skill-
+ * substituted because the values come from the brand-direction prompt rather
+ * than project.config.sh. Do not add them to build.sh's sed pattern.
+ */
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --text: #0A0A0B;
+  --muted: #5A5A5C;
+  --border: #0A0A0B;
+  --accent: __PRIMARY_ACCENT__;
+  --accent-on: __PRIMARY_ACCENT_ON__;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --max-width: 720px;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0A0A0B;
+    --surface: #141416;
+    --text: #F2F2F0;
+    --muted: #A0A0A2;
+    --border: #F2F2F0;
+    --accent: __PRIMARY_ACCENT_DARK__;
+    --accent-on: __PRIMARY_ACCENT_ON_DARK__;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3);
+}
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3);
+}
+
+.site-brand {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-3);
+  text-align: center;
+  color: var(--muted);
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin: 0 0 var(--space-2);
+}
+
+.lede {
+  font-size: 1.125rem;
+  color: var(--muted);
+  margin: 0 0 var(--space-4);
+}
+
+.hero,
+.cta-bottom {
+  margin-bottom: var(--space-5);
+}
+
+.body-content p {
+  margin: 0 0 var(--space-3);
+}
+
+.signup-form {
+  margin-top: var(--space-3);
+}
+
+.thank-you {
+  text-align: center;
+  padding: var(--space-5) var(--space-3);
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  opacity: 0.85;
+}
+
+/*
+ * project_source segmentation field — defence-in-depth hide selectors.
+ * The form-level `hidden: true` flag (set in terraform/modules/landing-page/
+ * forms.tf since v1.6.7) is the primary mechanism. The selectors below cover
+ * Forms v3 markup variants where the flag's render hasn't propagated.
+ */
+[data-field-name="project_source"],
+input[name="project_source"],
+label[for*="project_source"],
+.hs-form-field:has(input[name="project_source"]) {
+  display: none !important;
+  visibility: hidden;
+  position: absolute;
+  left: -9999px;
+}

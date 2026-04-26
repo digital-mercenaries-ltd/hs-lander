@@ -61,7 +61,21 @@ assert_file_contains "$TMP1/cfg/dml/heard.sh" 'CAPTURE_FORM_ID=""' "stub has emp
 # v1.5.0 hosting-modes fields — stub seeds sensible defaults per custom-domain-primary mode
 assert_file_contains "$TMP1/cfg/dml/heard.sh" 'LANDING_SLUG=""' "stub has LANDING_SLUG default"
 assert_file_contains "$TMP1/cfg/dml/heard.sh" 'THANKYOU_SLUG="thank-you"' "stub has THANKYOU_SLUG default"
-assert_file_contains "$TMP1/cfg/dml/heard.sh" 'HOSTING_MODE_HINT=""' "stub has HOSTING_MODE_HINT default"
+# HOSTING_MODE_HINT was removed from the stub in v1.7.0 — skill stores hosting
+# state in <project>.skillstate.sh now, outside the framework's project profile.
+assert_file_not_contains() {
+  local file="$1" pattern="$2" name="$3"
+  if grep -qE "$pattern" "$file"; then
+    echo "  FAIL: $name — pattern '$pattern' present in $file"
+    return 1
+  fi
+  echo "  PASS: $name"
+}
+assert_file_not_contains "$TMP1/cfg/dml/heard.sh" 'HOSTING_MODE_HINT=""' "stub does NOT seed HOSTING_MODE_HINT (removed in v1.7.0)"
+# v1.7.0 module flags — commented placeholders only (skill activates per project)
+assert_file_contains "$TMP1/cfg/dml/heard.sh" '# AUTO_PUBLISH_WELCOME_EMAIL' "stub mentions AUTO_PUBLISH_WELCOME_EMAIL placeholder"
+assert_file_contains "$TMP1/cfg/dml/heard.sh" '# EMAIL_PREVIEW_TEXT' "stub mentions EMAIL_PREVIEW_TEXT placeholder"
+assert_file_contains "$TMP1/cfg/dml/heard.sh" '# INCLUDE_BOTTOM_CTA' "stub mentions INCLUDE_BOTTOM_CTA placeholder"
 
 # --- Scenario 2: account missing → SCAFFOLD=error account-missing, exit 1 ---
 echo ""

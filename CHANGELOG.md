@@ -1,5 +1,67 @@
 # Changelog
 
+## v1.7.0 (2026-04-26)
+
+Minor release. Substantial scaffold redesign (HubL templates, dark-mode CSS, welcome-email anatomy), preview-text widget on welcome emails, tier-aware preflight, `auto_publish_welcome_email` module flag (Starter portals can suppress the publish step), allow-list updates, and three reference docs documenting the patterns. Six new served-asset/template-metadata checks in `tests/test-deployment.sh`. All new module variables have defaults that preserve v1.6.7 behaviour for existing consumers.
+
+### Added
+
+- **Scaffold `src/` tree.** `scaffold/src/templates/{landing-page,thank-you}.html`, `scaffold/src/css/main.css`, `scaffold/src/js/tracking.js`, `scaffold/src/emails/welcome-body.html`. The framework now ships working defaults that a fresh `npm run build && npm run deploy` produces a renderable landing page from. Templates use HubL primitives — `{# templateType: page #}`, `{{ get_asset_url('__DM_PATH__/...') }}`, `{{ standard_header_includes }}`, `{{ standard_footer_includes }}` — so HubSpot serves them with full runtime support (forms, scriptloader, analytics). CSS uses a `:root` design-token system with `@media (prefers-color-scheme: dark)` overrides. Welcome-email body is structured around the eleven-element anatomy documented in `references/email-anatomy.md`. The skill overwrites with brand-specific content during its workflow; the scaffold defaults exist purely so plumbing tests work pre-skill.
+- **`preview_text` widget on welcome emails.** New module variable `email_preview_text` (default empty). When set, populates the inbox preview line shown in Gmail / Apple Mail / Outlook. Widget lives at the head of `flexAreas.main.sections[].columns[].widgets`, ahead of `primary_rich_text_module`. Empty string emits an empty widget; HubSpot tolerates this and clients fall back to the first body line.
+- **`auto_publish_welcome_email` module flag** (default `true`). Gates `terraform_data.publish_welcome_email` on `count = var.auto_publish_welcome_email ? 1 : 0`. Default preserves v1.6.5+ behaviour for Pro+ portals where the publish endpoint is reachable. Skill flips to `false` on Starter portals (where the `marketing-email` scope is tier-gated and the publish API returns `MISSING_SCOPES`); the email then waits in `AUTOMATED_DRAFT` for manual UI publish.
+- **`include_bottom_cta` module flag** (default `true`). Advisory metadata only — scaffold `landing-page.html` ships a bottom CTA always-on; consumers opt out by editing the template. The variable plumbs through `tf.sh` and the project profile so the skill can record consumer intent without needing a templating engine in `build.sh`.
+- **Tier-aware preflight.** `scripts/lib/tier-classify.sh` (new) classifies `accountType` from `/account-info/v3/details` into `starter | pro | ent | ent+tx | unknown`, and provides `required_scopes_for_tier()` to compute the per-tier required scope set. `scripts/preflight.sh` emits two new lines per the contract:
+  - `PREFLIGHT_TIER=<label>` — sits between `PREFLIGHT_API_ACCESS` and `PREFLIGHT_SCOPES`. Skipped when API access fails.
+  - `PREFLIGHT_DOMAIN_CONNECTED=ok|missing|not-primary|skipped|error` — sits after `PREFLIGHT_DNS`. Probes `/cms/v3/domains` for the project's `DOMAIN`. Catches the temp-slug failure mode v1.6.5 documented (DOMAIN not connected to portal) before `terraform apply` rather than after.
+  - `PREFLIGHT_SCOPES` now compares granted scopes against the tier-derived required set. Starter requires the seven base scopes; Pro/Ent add `marketing-email`; Ent+TX adds `transactional-email`. When tier is `starter` and all base scopes are present, emits `PREFLIGHT_SCOPES=ok-starter` (rather than `ok`) so skills can recognise the tier without re-checking.
+- **Three reference docs:**
+  - `references/email-anatomy.md` — eleven-element welcome-email anatomy, HubSpot merge-tag list, no-manual-UTMs rule.
+  - `references/hubl-cheatsheet.md` — required HubL primitives, the "tokens stay, but as arguments to HubL functions" pattern, complete annotated example template.
+  - `references/hubspot-api-quirks.md` — empirical surface quirks accumulated across releases (flexAreas write-only on POST, response strips, widget metadata required, tier-gated scopes, etc.).
+- **Six new tests in `tests/test-deployment.sh`:** CSS asset returns 200; `hub_generated/template_assets` URL present in served HTML; `/hs/scriptloader/<portal>.js` present; `prefers-color-scheme` block in served CSS; `templateType: page` annotation persists in `cms/v3/source-code/published/metadata`; `preview_text` widget populated when `EMAIL_PREVIEW_TEXT` is set.
+
+### Changed
+
+- **`set-project-field.sh` allow-list** — added `EMAIL_PREVIEW_TEXT`, `AUTO_PUBLISH_WELCOME_EMAIL`, `INCLUDE_BOTTOM_CTA`. Removed `HOSTING_MODE_HINT` (was skill-only state, now lives in `<project>.skillstate.sh` outside the framework's project profile). The removal is enforced — a stale skill clinging to the old key fails loudly with `SET_FIELD=error unknown-key HOSTING_MODE_HINT` rather than silently writing nothing.
+- **`scaffold-project.sh`** — copies `scaffold/src/` into the new project alongside `package.json`, `terraform/main.tf`, etc. Project profile stub no longer seeds `HOSTING_MODE_HINT`; gains commented placeholders for `EMAIL_PREVIEW_TEXT`, `AUTO_PUBLISH_WELCOME_EMAIL`, `INCLUDE_BOTTOM_CTA`.
+- **`scripts/tf.sh`** — exports `TF_VAR_email_preview_text`, `TF_VAR_auto_publish_welcome_email`, `TF_VAR_include_bottom_cta` from the project profile (with default values matching the module defaults).
+- **`primary_rich_text_module.order`** — bumped from `0` to `1` because `preview_text` widget now occupies position `0`. Existing consumers see a no-op PATCH (PATCH preserves widget order; HubSpot accepts the renumber).
+
+### Migration
+
+New scaffold projects (`scaffold-project.sh`) get HubL templates, dark-mode CSS, and welcome-email anatomy by default. Existing projects keep their templates as-is. To upgrade an existing project's scaffold:
+
+```bash
+cp $FRAMEWORK_HOME/scaffold/src/templates/*.html src/templates/
+cp $FRAMEWORK_HOME/scaffold/src/css/main.css src/css/
+cp $FRAMEWORK_HOME/scaffold/src/js/tracking.js src/js/
+cp $FRAMEWORK_HOME/scaffold/src/emails/welcome-body.html src/emails/
+# then re-stamp project-specific copy/branding (skill does this automatically;
+# for hand-edits, replace __PRIMARY_ACCENT__, __BRAND_NAME__, __PRIMARY_CTA_URL__
+# etc. with brand values)
+npm run build && npm run deploy
+bash scripts/tf.sh taint module.landing_page.restapi_object.landing_page
+bash scripts/tf.sh taint module.landing_page.restapi_object.thankyou_page
+bash scripts/tf.sh apply
+```
+
+The taint forces page recreation so the new `templateType`-annotated templates land cleanly in HubSpot's CMS. Module variables `auto_publish_welcome_email` and `include_bottom_cta` default `true`; `email_preview_text` defaults empty (widget renders no preview line until set).
+
+**Allow-list changes:** `HOSTING_MODE_HINT` is no longer accepted by `set-project-field.sh`. New keys accepted: `EMAIL_PREVIEW_TEXT`, `AUTO_PUBLISH_WELCOME_EMAIL`, `INCLUDE_BOTTOM_CTA`.
+
+**Starter consumers:** the skill v1.7.0 plan sets `AUTO_PUBLISH_WELCOME_EMAIL=false` on your project, suppressing the expected `MISSING_SCOPES` error from `publish_welcome_email`. Until the skill is bumped, you can set it manually:
+
+```bash
+bash $FRAMEWORK_HOME/scripts/set-project-field.sh \
+  <account> <project> AUTO_PUBLISH_WELCOME_EMAIL=false
+```
+
+**Empirical caveats.** Two of the v1.7.0 plan's prerequisites ship with informed-guess defaults that need real-portal verification:
+- `accountType` → tier label mapping in `scripts/lib/tier-classify.sh` is informed-guess (`STANDARD` → starter, `PROFESSIONAL` → pro, `ENTERPRISE` → ent). Update to match observed values when probes complete.
+- Per-tier scope gating is informed-guess (Starter 7 / Pro+Ent 8 / Ent+TX 9). Update when verified against real Service Keys.
+
+`scripts/lib/tier-classify.sh` carries TODO comments where these need verification. A consumer who probes real portals at each tier should update the table and ship as v1.7.1.
+
 ## v1.6.7 (2026-04-26)
 
 Patch — two source fixes plus four narrow API-level tests. Welcome emails created since v1.5.0 silently render empty; the `project_source` segmentation field has been visible on rendered forms despite CSS hiding. No new module inputs; no scaffold or preflight changes (those are v1.7.0 scope).
