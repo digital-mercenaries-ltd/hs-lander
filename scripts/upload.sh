@@ -8,6 +8,12 @@
 # "Environment specified in path 'developer' is invalid". We publish directly
 # (consumers rely on `npm run deploy` going live); a draft workflow could
 # live on a future --draft flag if needed.
+#
+# v3 expects multipart/form-data with a 'file' part. Do NOT add an explicit
+# Content-Type header — curl's auto-generated boundary header would be lost
+# and the request silently transfers no body (HubSpot returns 2xx but the
+# file never lands — "ghost uploads" where status looks fine and templates
+# never appear in Design Manager).
 set -euo pipefail
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
@@ -47,8 +53,7 @@ while IFS= read -r file; do
   http_code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
     "${API_BASE}${dm_path}" \
     -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
-    -H "Content-Type: application/octet-stream" \
-    --data-binary "@${file}")
+    -F "file=@${file}")
 
   if [[ "$http_code" =~ ^2 ]]; then
     echo "OK ($http_code)"

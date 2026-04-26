@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.6 (2026-04-26)
+
+Patch — one-line fix to `scripts/upload.sh` so `npm run deploy` actually transfers file bodies to HubSpot CMS Source Code v3. No Terraform changes; no module input changes.
+
+### Fixed
+
+- **`npm run deploy` reported 8/8 successes but no templates landed in Design Manager.** After v1.6.5 corrected the endpoint (`/developer/content` → `/published/content`), `scripts/upload.sh` continued to send the body as `Content-Type: application/octet-stream` with `--data-binary`. CMS Source Code v3 expects `multipart/form-data` with a `file` part on `PUT /content/{path}`; the octet-stream body returns 2xx (the path is recognised) but treats the body as empty, producing "ghost uploads" where status codes look fine and the live page continues to serve HubSpot's "template not found" fallback. Switched the curl invocation to `-F "file=@${file}"` (curl auto-generates the multipart boundary header — do not set `Content-Type` manually or the boundary header is clobbered). Header comment updated to record the requirement.
+
+### Migration
+
+No Terraform changes. `scripts/upload.sh` lives in each project's checked-out copy — projects scaffolded against earlier versions need the updated `upload.sh`. Until a `hs-lander-refresh-scripts` command lands (roadmap), manually copy `scripts/upload.sh` from `$FRAMEWORK_HOME/scripts/upload.sh` into the project, or apply the inline change (`-H "Content-Type: application/octet-stream"` removed; `--data-binary "@${file}"` → `-F "file=@${file}"`). Bundle this with the v1.6.5 endpoint refresh if you skipped that one.
+
 ## v1.6.5 (2026-04-23)
 
 Patch — two source fixes surfaced when Heard deployed against v1.6.4. No module input changes; one new `terraform_data` resource inside the `landing-page` module (see migration below); one one-line script path change.
