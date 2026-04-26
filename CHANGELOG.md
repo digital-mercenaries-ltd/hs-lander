@@ -1,5 +1,57 @@
 # Changelog
 
+## v1.6.7 (2026-04-26)
+
+Patch — two source fixes plus four narrow API-level tests. Welcome emails created since v1.5.0 silently render empty; the `project_source` segmentation field has been visible on rendered forms despite CSS hiding. No new module inputs; no scaffold or preflight changes (those are v1.7.0 scope).
+
+### Fixed
+
+- **Welcome email renders empty for any project deployed under v1.5.0–v1.6.6.** Three compounding bugs in `terraform/modules/landing-page/emails.tf` made the body content unreachable to HubSpot's render engine:
+  1. Body content was written to `widgets.primary_rich_text_module.body.rich_text`. HubSpot's render engine reads `body.html`. The API accepts both writes silently but only renders the latter.
+  2. The widget object lacked classifying metadata (`id`, `name`, `module_id`, `type`, `order`, `label`, `smart_type`, `child_css`, `css`, `styles`). Without metadata the layout engine cannot classify the widget and skips it.
+  3. `content.flexAreas` was absent. HubSpot generates a default layout containing only `footer_module`. Even with correct widget shape there is nowhere for the rich-text body to render.
+
+  Fixed across both `data` (POST) and `update_data` (PATCH) blocks: body field key changed to `html`; full widget metadata supplied (including `module_id: 1155639`, the global HubSpot rich-text module ID — confirmed across multiple portals); explicit `flexAreas.main.sections[].columns[].widgets = ["primary_rich_text_module", "footer_module"]` placement plus the section/column envelope (`backgroundColor`, `backgroundType`, `paddingTop`, `paddingBottom`, `stack`) HubSpot requires to keep the surface from being silently stripped.
+
+- **`project_source` segmentation field visible on rendered forms.** Since v1.5.0 the field has relied on scaffold CSS (`.hs_project_source { display: none; }`) to hide it. HubSpot Forms v3 markup differs from v2 across browsers, so class-name selectors miss in many environments. Both `capture_form` and `survey_form` now set `hidden = true` at field definition — HubSpot's documented mechanism for hiding fields independent of class-name churn. Scaffold CSS remains as defence-in-depth for older portals.
+
+### Added
+
+- **Four API-level checks in `tests/test-deployment.sh`** that catch regressions to the above fixes:
+  1. `project_source.hidden == true` on `capture_form`.
+  2. `welcome_email.content.widgets.primary_rich_text_module.body.html | length > 0` (correct field key, populated).
+  3. `welcome_email.content.flexAreas.main.sections | length > 0` (layout exists).
+  4. `welcome_email` flexAreas widgets list contains `primary_rich_text_module` (widget actually placed).
+
+  All checks GET the existing API resources via `WELCOME_EMAIL_ID` / `CAPTURE_FORM_ID` already exported by `post-apply.sh`; no new inputs required.
+
+### Migration
+
+This is the critical migration call: **PATCH cannot fix existing welcome_email resources.** The `/marketing/v3/emails` PATCH surface silently strips `flexAreas` to `{}` (confirmed empirically). Consumers upgrading from v1.6.6 → v1.6.7 will get `body.html` written via PATCH but no layout placement, leaving the email still empty.
+
+Required upgrade sequence per consumer:
+
+```bash
+# In project directory:
+bash scripts/tf.sh taint module.landing_page.restapi_object.welcome_email
+bash scripts/tf.sh apply
+```
+
+The `taint` triggers a destroy + recreate; the `data` (POST) payload includes the full `flexAreas` shape, so the recreated email lands correct. `terraform_data.publish_welcome_email` re-fires automatically because its `triggers_replace` is keyed on the email ID.
+
+**On Starter portals**, that re-fire will surface a `MISSING_SCOPES` error from HubSpot:
+
+```
+This app hasn't been granted all required scopes.
+requiredGranularScopes: ["transactional-email", "marketing-email"]
+```
+
+This is **expected and harmless** — those scopes are tier-gated and unavailable on Starter regardless of Service Key configuration. The email itself is recreated correctly; only the auto-publish step fails. Manual UI publish (Marketing → Email → '<project> — Welcome' → Review and publish) completes the flow. v1.7.0 makes the publish step opt-out via the `auto_publish_welcome_email` variable so this error stops appearing on Starter.
+
+Pro+ consumers: `publish_welcome_email` continues to fire automatically.
+
+`forms.tf` changes propagate via in-place UPDATE — no taint needed for the form fix. `project_source` field becomes hidden on the rendered form on next apply; existing form ID and submission history preserved.
+
 ## v1.6.6 (2026-04-26)
 
 Patch — one-line fix to `scripts/upload.sh` so `npm run deploy` actually transfers file bodies to HubSpot CMS Source Code v3. No Terraform changes; no module input changes.

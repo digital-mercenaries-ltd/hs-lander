@@ -76,6 +76,17 @@ if [[ -n "${CAPTURE_FORM_ID:-}" ]]; then
     -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
     "https://api.hubapi.com/marketing/v3/forms/${CAPTURE_FORM_ID}")
   assert_equal "$form_status" "200" "capture form exists in HubSpot API"
+
+  # v1.6.7 check: project_source field has the canonical `hidden: true` flag
+  # set at field definition time. Catches regressions where the flag is
+  # dropped and CSS hiding becomes the sole mechanism (fragile across
+  # browsers and Forms v3 markup variants).
+  form_json=$(curl -s \
+    -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
+    "https://api.hubapi.com/marketing/v3/forms/${CAPTURE_FORM_ID}")
+  project_source_hidden=$(echo "$form_json" \
+    | jq -r '[.fieldGroups[].fields[] | select(.name == "project_source") | .hidden] | first // false')
+  assert_equal "$project_source_hidden" "true" "project_source field has hidden=true on capture form"
 else
   echo "  SKIP: CAPTURE_FORM_ID not set — run post-apply first"
 fi
@@ -93,6 +104,40 @@ if [[ -n "${WELCOME_EMAIL_ID:-}" ]]; then
     -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
     "https://api.hubapi.com/marketing/v3/emails/${WELCOME_EMAIL_ID}")
   assert_equal "$email_status" "200" "welcome email exists in HubSpot API"
+
+  # v1.6.7 checks: verify the welcome email has the right widget shape and
+  # layout placement. Without all three, HubSpot accepts the create silently
+  # but the email renders empty. PATCH cannot fix this — consumers must
+  # `terraform taint` + recreate. See CHANGELOG migration block.
+  email_json=$(curl -s \
+    -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
+    "https://api.hubapi.com/marketing/v3/emails/${WELCOME_EMAIL_ID}")
+
+  # Check 1: body.html populated (correct field key — body.rich_text is
+  # accepted on write but never rendered).
+  body_html_length=$(echo "$email_json" \
+    | jq -r '.content.widgets.primary_rich_text_module.body.html // "" | length')
+  if [[ "$body_html_length" -gt 0 ]]; then
+    assert_equal "true" "true" "welcome email body.html is populated"
+  else
+    assert_equal "true" "false" "welcome email body.html is populated (length=$body_html_length)"
+  fi
+
+  # Check 2: flexAreas.main.sections has at least one section (layout
+  # placement exists at all).
+  flexareas_sections_count=$(echo "$email_json" \
+    | jq -r '.content.flexAreas.main.sections | length // 0')
+  if [[ "$flexareas_sections_count" -gt 0 ]]; then
+    assert_equal "true" "true" "welcome email flexAreas has sections"
+  else
+    assert_equal "true" "false" "welcome email flexAreas has sections (got $flexareas_sections_count)"
+  fi
+
+  # Check 3: the rich-text widget is placed in the layout (not just defined
+  # but actually wired into a column's widgets list).
+  widget_placed=$(echo "$email_json" \
+    | jq -r '[.content.flexAreas.main.sections[].columns[].widgets[]?] | any(. == "primary_rich_text_module")')
+  assert_equal "$widget_placed" "true" "primary_rich_text_module is placed in flexAreas layout"
 fi
 
 test_summary

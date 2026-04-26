@@ -30,6 +30,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-23-v1.6.4-forms-field-group-cap.md | Complete | v1.6.4 |
 | 2026-04-23-v1.6.5-email-publish-and-upload-endpoint.md | Complete | v1.6.5 |
 | 2026-04-26-v1.6.6-upload-multipart.md | Complete | v1.6.6 |
+| 2026-04-26-v1.6.7-email-rendering-and-form-hide.md | Complete | v1.6.7 |
 
 ### In-flight
 

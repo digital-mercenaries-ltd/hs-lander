@@ -18,6 +18,14 @@
 #   email via the update API. Use the publish API instead." Therefore the
 #   update payload (`update_data`) must omit those fields. Create payload
 #   (`data`) sends the non-transition state so POST succeeds on a fresh email.
+# - Welcome email body must live at content.widgets.primary_rich_text_module.body.html
+#   (NOT body.rich_text — accepted on write, never rendered). The widget object
+#   needs full metadata (id, name, module_id 1155639, type "module", order, etc.)
+#   and content.flexAreas.main.sections[].columns[].widgets must list
+#   "primary_rich_text_module" alongside "footer_module" for the layout engine
+#   to place it. PATCH silently strips flexAreas to {}, so consumers upgrading
+#   from a pre-fix version need a `terraform taint module.landing_page.
+#   restapi_object.welcome_email` + apply to recreate via the create path.
 # - POST cannot create an email directly in AUTOMATED state. HubSpot rejects
 #   with "Creating an email in the published state AUTOMATED is not allowed.
 #   Consider using the DRAFT state AUTOMATED_DRAFT." The create-and-publish
@@ -60,11 +68,47 @@ resource "restapi_object" "welcome_email" {
 
     content = {
       templatePath = "@hubspot/email/dnd/Plain_email.html"
+      flexAreas = {
+        main = {
+          boxFirstElementIndex    = 0
+          boxLastElementIndex     = 0
+          boxed                   = false
+          isSingleColumnFullWidth = true
+          sections = [{
+            id   = "builtin_section-0"
+            path = null
+            columns = [{
+              id      = "builtin_column_0-0"
+              width   = 12
+              widgets = ["primary_rich_text_module", "footer_module"]
+            }]
+            style = {
+              backgroundColor = "{{style_settings.background_color}}"
+              backgroundType  = "FULL"
+              paddingTop      = "0px"
+              paddingBottom   = "0px"
+              stack           = "LEFT_TO_RIGHT"
+            }
+          }]
+        }
+      }
       widgets = {
         primary_rich_text_module = {
           body = {
-            rich_text = var.email_body_html
+            html                     = var.email_body_html
+            hs_enable_module_padding = false
+            module_id                = 1155639
           }
+          id         = "primary_rich_text_module"
+          name       = "primary_rich_text_module"
+          module_id  = 1155639
+          order      = 0
+          type       = "module"
+          label      = null
+          smart_type = null
+          child_css  = {}
+          css        = {}
+          styles     = {}
         }
       }
     }
@@ -96,11 +140,47 @@ resource "restapi_object" "welcome_email" {
 
     content = {
       templatePath = "@hubspot/email/dnd/Plain_email.html"
+      flexAreas = {
+        main = {
+          boxFirstElementIndex    = 0
+          boxLastElementIndex     = 0
+          boxed                   = false
+          isSingleColumnFullWidth = true
+          sections = [{
+            id   = "builtin_section-0"
+            path = null
+            columns = [{
+              id      = "builtin_column_0-0"
+              width   = 12
+              widgets = ["primary_rich_text_module", "footer_module"]
+            }]
+            style = {
+              backgroundColor = "{{style_settings.background_color}}"
+              backgroundType  = "FULL"
+              paddingTop      = "0px"
+              paddingBottom   = "0px"
+              stack           = "LEFT_TO_RIGHT"
+            }
+          }]
+        }
+      }
       widgets = {
         primary_rich_text_module = {
           body = {
-            rich_text = var.email_body_html
+            html                     = var.email_body_html
+            hs_enable_module_padding = false
+            module_id                = 1155639
           }
+          id         = "primary_rich_text_module"
+          name       = "primary_rich_text_module"
+          module_id  = 1155639
+          order      = 0
+          type       = "module"
+          label      = null
+          smart_type = null
+          child_css  = {}
+          css        = {}
+          styles     = {}
         }
       }
     }
