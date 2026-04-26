@@ -25,9 +25,11 @@ PREFLIGHT_CONTRACT_KEYS=(
   PREFLIGHT_PROJECT_PROFILE
   PREFLIGHT_CREDENTIAL
   PREFLIGHT_API_ACCESS
+  PREFLIGHT_TIER
   PREFLIGHT_SCOPES
   PREFLIGHT_PROJECT_SOURCE
   PREFLIGHT_DNS
+  PREFLIGHT_DOMAIN_CONNECTED
   PREFLIGHT_GA4
   PREFLIGHT_FORM_IDS
   PREFLIGHT_TOOLS_OPTIONAL
@@ -60,6 +62,10 @@ setup_env() {
     "$dir/mock-bin"
   cp "$REPO_DIR/scripts/preflight.sh" "$dir/project/scripts/preflight.sh"
   chmod +x "$dir/project/scripts/preflight.sh"
+  # Tier classifier lives in scripts/lib/ and is sourced by preflight.sh —
+  # mirror the layout so the source line resolves in the test sandbox.
+  mkdir -p "$dir/project/scripts/lib"
+  cp "$REPO_DIR/scripts/lib/tier-classify.sh" "$dir/project/scripts/lib/tier-classify.sh"
   # VERSION file at the project root, mirroring scaffold-project.sh layout.
   # preflight.sh resolves VERSION from its own script location, so this sits
   # at $dir/project/VERSION (one level up from $dir/project/scripts/).
@@ -176,6 +182,7 @@ case "$url" in
   *"/account-info/v3/details"*)                         endpoint="account_info" ;;
   *"/crm/v3/properties/contacts/project_source"*)       endpoint="project_source" ;;
   *"/oauth/v2/private-apps/get/access-token-info"*)     endpoint="scopes" ;;
+  *"/cms/v3/domains"*)                                  endpoint="domains" ;;
 esac
 
 code="200"
@@ -183,19 +190,50 @@ case "$endpoint" in
   account_info)    code="${MOCK_CURL_ACCOUNT_INFO_CODE:-200}" ;;
   project_source)  code="${MOCK_CURL_PROJECT_SOURCE_CODE:-200}" ;;
   scopes)          code="${MOCK_CURL_SCOPES_CODE:-200}" ;;
+  domains)         code="${MOCK_CURL_DOMAINS_CODE:-200}" ;;
 esac
 
 # Write body to -o file for endpoints that carry meaningful bodies.
-if [[ -n "$output_file" && "$output_file" != "/dev/null" && "$endpoint" == "scopes" ]]; then
-  if [[ -n "${MOCK_CURL_SCOPES_BODY:-}" ]]; then
-    printf '%s' "$MOCK_CURL_SCOPES_BODY" > "$output_file"
-  else
-    default_list="crm.objects.contacts.read,crm.objects.contacts.write,crm.schemas.contacts.write,crm.lists.read,crm.lists.write,forms,content"
-    list="${MOCK_CURL_SCOPES_LIST:-$default_list}"
-    # Convert comma-list to JSON array body.
-    json_list=$(printf '"%s"' "$list" | sed 's/,/","/g')
-    printf '{"scopes":[%s]}' "$json_list" > "$output_file"
-  fi
+if [[ -n "$output_file" && "$output_file" != "/dev/null" ]]; then
+  case "$endpoint" in
+    scopes)
+      if [[ -n "${MOCK_CURL_SCOPES_BODY:-}" ]]; then
+        printf '%s' "$MOCK_CURL_SCOPES_BODY" > "$output_file"
+      else
+        # Default mock includes marketing-email because the default mock
+        # tier is PROFESSIONAL (see account_info case below). Starter
+        # scenarios should override MOCK_CURL_SCOPES_LIST and MOCK_CURL_ACCOUNT_TYPE
+        # together.
+        default_list="crm.objects.contacts.read,crm.objects.contacts.write,crm.schemas.contacts.write,crm.lists.read,crm.lists.write,forms,content,marketing-email"
+        list="${MOCK_CURL_SCOPES_LIST:-$default_list}"
+        json_list=$(printf '"%s"' "$list" | sed 's/,/","/g')
+        printf '{"scopes":[%s]}' "$json_list" > "$output_file"
+      fi
+      ;;
+    account_info)
+      # Default tier mock matches PROFESSIONAL → "pro" so existing scenarios
+      # see the same scope set as before. Override per-scenario when testing
+      # tier-aware behaviour.
+      account_type="${MOCK_CURL_ACCOUNT_TYPE:-PROFESSIONAL}"
+      if [[ -n "${MOCK_CURL_ACCOUNT_INFO_BODY:-}" ]]; then
+        printf '%s' "$MOCK_CURL_ACCOUNT_INFO_BODY" > "$output_file"
+      else
+        printf '{"accountType":"%s"}' "$account_type" > "$output_file"
+      fi
+      ;;
+    domains)
+      if [[ -n "${MOCK_CURL_DOMAINS_BODY:-}" ]]; then
+        printf '%s' "$MOCK_CURL_DOMAINS_BODY" > "$output_file"
+      else
+        # Default body returns the testproj domain as a primary landing-pages
+        # domain so the default test scenario (custom-domain mode) sees
+        # PREFLIGHT_DOMAIN_CONNECTED=ok. Override per-scenario when testing
+        # missing or not-primary states.
+        domain="${MOCK_CURL_DOMAIN:-testproj.example.com}"
+        printf '{"results":[{"domain":"%s","isUsedForLandingPages":true}]}' "$domain" > "$output_file"
+      fi
+      ;;
+  esac
 fi
 
 echo "$code"
@@ -675,7 +713,7 @@ assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools
 assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
 assert_full_contract "$LOGO" "Scenario O"
 preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
-assert_equal "$preflight_line_count" "13" "exactly 13 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 12)"
+assert_equal "$preflight_line_count" "15" "exactly 15 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 14)"
 
 # --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
 # Two tools missing: csv list in the detail.
@@ -727,7 +765,7 @@ exitQ=$(run_preflight_sanitised "$TMPQ" "$LOGQ" || true)
 assert_equal "$exitQ" "0" "exit 0 even with all optional tools missing"
 assert_file_contains "$LOGQ" "^PREFLIGHT_TOOLS_OPTIONAL=warn pandoc,pdftotext,git$" "TOOLS_OPTIONAL lists all three tools as csv in stable order"
 
-# --- Scenario R: line ordering — 12 PREFLIGHT_* lines in stable order ---
+# --- Scenario R: line ordering — 15 PREFLIGHT_* lines in stable order ---
 # Guards against a refactor that puts TOOLS_OPTIONAL somewhere other than
 # the last line, or emits an out-of-order early-exit branch.
 
@@ -740,7 +778,7 @@ write_project_sourcing_chain "$TMPR"
 write_mock_bin "$TMPR"
 LOGR="$TMPR/preflight.log"
 run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
-expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 

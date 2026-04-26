@@ -26,6 +26,16 @@
 #   to place it. PATCH silently strips flexAreas to {}, so consumers upgrading
 #   from a pre-fix version need a `terraform taint module.landing_page.
 #   restapi_object.welcome_email` + apply to recreate via the create path.
+# - The preview_text widget (v1.7.0) lives in flexAreas widgets array first,
+#   ahead of primary_rich_text_module, and ahead of the implicit footer_module.
+#   It carries its own metadata (id "preview_text", name "preview_text", type
+#   "text", order 0). Empty body.value renders no preview line and clients
+#   fall back to the first body line — safe default.
+# - terraform_data.publish_welcome_email is gated on var.auto_publish_welcome_email
+#   (default true). On Starter portals the publish endpoint requires
+#   marketing-email scope which Starter cannot grant; flip the variable to
+#   false (via set-project-field.sh AUTO_PUBLISH_WELCOME_EMAIL=false) to
+#   suppress the apply-time scope error and publish manually via UI.
 # - POST cannot create an email directly in AUTOMATED state. HubSpot rejects
 #   with "Creating an email in the published state AUTOMATED is not allowed.
 #   Consider using the DRAFT state AUTOMATED_DRAFT." The create-and-publish
@@ -80,7 +90,7 @@ resource "restapi_object" "welcome_email" {
             columns = [{
               id      = "builtin_column_0-0"
               width   = 12
-              widgets = ["primary_rich_text_module", "footer_module"]
+              widgets = ["preview_text", "primary_rich_text_module", "footer_module"]
             }]
             style = {
               backgroundColor = "{{style_settings.background_color}}"
@@ -93,6 +103,16 @@ resource "restapi_object" "welcome_email" {
         }
       }
       widgets = {
+        preview_text = {
+          body = {
+            value = var.email_preview_text
+          }
+          id    = "preview_text"
+          name  = "preview_text"
+          order = 0
+          type  = "text"
+          label = "Preview Text <span class=help-text>This will be used as the preview text that displays in some email clients</span>"
+        }
         primary_rich_text_module = {
           body = {
             html                     = var.email_body_html
@@ -102,7 +122,7 @@ resource "restapi_object" "welcome_email" {
           id         = "primary_rich_text_module"
           name       = "primary_rich_text_module"
           module_id  = 1155639
-          order      = 0
+          order      = 1
           type       = "module"
           label      = null
           smart_type = null
@@ -152,7 +172,7 @@ resource "restapi_object" "welcome_email" {
             columns = [{
               id      = "builtin_column_0-0"
               width   = 12
-              widgets = ["primary_rich_text_module", "footer_module"]
+              widgets = ["preview_text", "primary_rich_text_module", "footer_module"]
             }]
             style = {
               backgroundColor = "{{style_settings.background_color}}"
@@ -165,6 +185,16 @@ resource "restapi_object" "welcome_email" {
         }
       }
       widgets = {
+        preview_text = {
+          body = {
+            value = var.email_preview_text
+          }
+          id    = "preview_text"
+          name  = "preview_text"
+          order = 0
+          type  = "text"
+          label = "Preview Text <span class=help-text>This will be used as the preview text that displays in some email clients</span>"
+        }
         primary_rich_text_module = {
           body = {
             html                     = var.email_body_html
@@ -174,7 +204,7 @@ resource "restapi_object" "welcome_email" {
           id         = "primary_rich_text_module"
           name       = "primary_rich_text_module"
           module_id  = 1155639
-          order      = 0
+          order      = 1
           type       = "module"
           label      = null
           smart_type = null
@@ -203,6 +233,7 @@ resource "restapi_object" "welcome_email" {
 # published email is a no-op, so the replace-triggered rerun after a
 # manual taint is safe.
 resource "terraform_data" "publish_welcome_email" {
+  count            = var.auto_publish_welcome_email ? 1 : 0
   triggers_replace = [restapi_object.welcome_email.id]
 
   provisioner "local-exec" {

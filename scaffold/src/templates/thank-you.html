@@ -1,0 +1,21 @@
+{# templateType: page #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Thank you · {{ page_meta.html_title|default:"__BRAND_NAME__" }}</title>
+  {{ standard_header_includes }}
+  <link rel="stylesheet" href="{{ get_asset_url('__DM_PATH__/css/main.css') }}">
+</head>
+<body>
+  <main class="thank-you">
+    <h1>You're in.</h1>
+    <p class="lede">Thanks for signing up. Check your inbox in the next minute or two for a welcome email from __BRAND_NAME__.</p>
+    <p><a href="https://__DOMAIN__/">Return to __BRAND_NAME__</a></p>
+  </main>
+  <script src="{{ get_asset_url('__DM_PATH__/js/tracking.js') }}"></script>
+  {{ standard_footer_includes }}
+</body>
+</html>

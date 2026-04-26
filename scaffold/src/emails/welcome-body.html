@@ -1,0 +1,69 @@
+<!--
+  scaffold/src/emails/welcome-body.html — welcome-email body, inner HTML only.
+  HubSpot's @hubspot/email/dnd/Plain_email.html template wraps this with the
+  <html>/<head>/<body> shell, the legal unsubscribe footer, and physical-
+  address block. Do NOT add a shell here — duplicate shells break rendering.
+  See references/email-anatomy.md for the eleven-element anatomy this body
+  encodes. The <!-- N. Element --> labels are deliberate; keep them so per-
+  project edits target the right slot.
+  Tokens substituted at build time (or by the skill before terraform apply):
+    __BRAND_NAME__       — project's brand / team name
+    __PRIMARY_CTA_URL__  — primary CTA destination (profile-aware)
+    __DOMAIN__           — project domain
+  No manual UTM parameters in any in-email link — HubSpot auto-tags marketing
+  emails and overwrites manual UTMs. UTMs are appropriate only on share-out
+  links (LinkedIn / WhatsApp / forward-via-email) which leave HubSpot's
+  email-tracking scope.
+-->
+
+<!-- 1. Preheader -->
+<span style="display:none;font-size:0;color:transparent;line-height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+  Welcome to __BRAND_NAME__ — your sign-up is confirmed.
+</span>
+
+<!-- 2. View in browser -->
+<p style="font-size:11px;color:#888;text-align:right;margin:0 0 16px;">
+  <a href="{{ view_as_page_url }}" style="color:#888;">View in browser</a>
+</p>
+
+<!-- 3. Brand wordmark -->
+<p style="text-align:center;margin:0 0 24px;">
+  <strong>__BRAND_NAME__</strong>
+</p>
+
+<!-- 4. Headline -->
+<h1 style="margin:0 0 8px;">You're in, {{ contact.firstname|default:"friend" }}.</h1>
+
+<!-- 5. Subhead -->
+<p style="margin:0 0 24px;color:#555;">Thanks for joining the __BRAND_NAME__ list.</p>
+
+<!-- 6. Body -->
+<p>This is the placeholder welcome message. Replace with the project's two-to-four short paragraphs covering: what they signed up for, what happens next, and any first-step they can take immediately.</p>
+<p>Skill-driven scaffolding overwrites this body via the brand-direction prompt; the placeholder is here so the email renders end-to-end before final copy lands.</p>
+
+<!-- 7. Primary CTA -->
+<p style="text-align:center;margin:32px 0;">
+  <a href="__PRIMARY_CTA_URL__" style="background:#0A0A0B;color:#FFFFFF;padding:12px 24px;text-decoration:none;border-radius:4px;display:inline-block;">
+    Open __BRAND_NAME__
+  </a>
+</p>
+
+<!-- 8. Secondary engagement (uncomment to activate share-with-a-friend row)
+<p style="text-align:center;margin:32px 0;font-size:14px;">
+  Know someone who'd like this?
+  <a href="https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2F__DOMAIN__%2F&utm_source=welcome_email&utm_medium=share">Share on LinkedIn</a>
+  ·
+  <a href="https://wa.me/?text=Check%20out%20__BRAND_NAME__%20https%3A%2F%2F__DOMAIN__%2F">Share on WhatsApp</a>
+</p>
+-->
+
+<!-- 9. Reply prompt -->
+<p>Hit reply if you've got questions or feedback. We read every one.</p>
+
+<!-- 10. Sign-off -->
+<p>— The __BRAND_NAME__ team</p>
+
+<!-- 11. Cadence note -->
+<p style="font-size:12px;color:#888;margin-top:24px;">
+  We send roughly one update a fortnight. Unsubscribe any time via the link below.
+</p>

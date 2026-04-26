@@ -49,7 +49,21 @@ unset _preflight_script_dir _preflight_version_file _framework_version
 required_failed=0
 token=""
 scopes_body_file=""
-trap 'unset token; [[ -n "$scopes_body_file" ]] && rm -f "$scopes_body_file"' EXIT
+account_info_body_file=""
+domains_body_file=""
+# DOMAIN_CONNECTED is emitted after the DNS block, but the curl that
+# populates these runs inside the credential found-branch above. Initialise
+# at module scope so the post-DNS emission can detect "we never even tried"
+# (status="000") regardless of which early-exit branch ran.
+domains_status="000"
+domains_curl_exit=0
+trap 'unset token; for _f in "$scopes_body_file" "$account_info_body_file" "$domains_body_file"; do [[ -n "$_f" ]] && rm -f "$_f"; done' EXIT
+
+# Tier classifier — sourced for classify_tier_from_account_details() and
+# required_scopes_for_tier(). Lives in lib/ so the surface stays cohesive
+# even as more classifiers accrue.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/tier-classify.sh"
 
 # --- TOOLS_REQUIRED ---
 # Runs first so tool availability is reported even when config is unset.
@@ -68,7 +82,8 @@ else
   _missing_csv=$(IFS=,; echo "${_tools_missing[*]}")
   echo "PREFLIGHT_TOOLS_REQUIRED=missing $_missing_csv"
   for _check in PROJECT_POINTER ACCOUNT_PROFILE PROJECT_PROFILE CREDENTIAL \
-                API_ACCESS SCOPES PROJECT_SOURCE DNS GA4 FORM_IDS TOOLS_OPTIONAL; do
+                API_ACCESS TIER SCOPES PROJECT_SOURCE DNS DOMAIN_CONNECTED \
+                GA4 FORM_IDS TOOLS_OPTIONAL; do
     echo "PREFLIGHT_${_check}=skipped (required tools missing)"
   done
   exit 1
@@ -180,9 +195,11 @@ if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=skipped (no project pointer)"
   echo "PREFLIGHT_CREDENTIAL=skipped (no project pointer)"
   echo "PREFLIGHT_API_ACCESS=skipped (no project pointer)"
+  echo "PREFLIGHT_TIER=skipped (no project pointer)"
   echo "PREFLIGHT_SCOPES=skipped (no project pointer)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (no project pointer)"
   echo "PREFLIGHT_DNS=skipped (no project pointer)"
+  echo "PREFLIGHT_DOMAIN_CONNECTED=skipped (no project pointer)"
   echo "PREFLIGHT_GA4=skipped (no project pointer)"
   echo "PREFLIGHT_FORM_IDS=skipped (no project pointer)"
   _emit_tools_optional
@@ -202,9 +219,11 @@ if [[ -z "${HS_LANDER_ACCOUNT:-}" || -z "${HS_LANDER_PROJECT:-}" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=skipped (pointer incomplete)"
   echo "PREFLIGHT_CREDENTIAL=skipped (pointer incomplete)"
   echo "PREFLIGHT_API_ACCESS=skipped (pointer incomplete)"
+  echo "PREFLIGHT_TIER=skipped (pointer incomplete)"
   echo "PREFLIGHT_SCOPES=skipped (pointer incomplete)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (pointer incomplete)"
   echo "PREFLIGHT_DNS=skipped (pointer incomplete)"
+  echo "PREFLIGHT_DOMAIN_CONNECTED=skipped (pointer incomplete)"
   echo "PREFLIGHT_GA4=skipped (pointer incomplete)"
   echo "PREFLIGHT_FORM_IDS=skipped (pointer incomplete)"
   _emit_tools_optional
@@ -271,6 +290,7 @@ if [[ $account_profile_ok -eq 0 ]]; then
   # as "add a Keychain entry for the service name from your account config".
   echo "PREFLIGHT_CREDENTIAL=skipped (account profile missing or incomplete)"
   echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
+  echo "PREFLIGHT_TIER=skipped (no credential)"
   echo "PREFLIGHT_SCOPES=skipped (no credential)"
   echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"
   required_failed=1
@@ -291,6 +311,8 @@ else
   scopes_status="000"
   scopes_curl_exit=0
   scopes_body_file=""
+  domains_status="000"
+  domains_curl_exit=0
   if token=$(security find-generic-password \
                -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
                -a "$USER" -w 2>/dev/null); then
@@ -299,7 +321,10 @@ else
       # Capture curl's exit code separately (via `|| curl_exit=$?`) so a
       # non-zero exit doesn't trip set -e — we need to distinguish
       # "curl couldn't connect" (unreachable) from "HTTP error response".
-      api_status=$(curl -s -o /dev/null -w "%{http_code}" \
+      # Capture body so the tier-classifier can read accountType / subscriptions
+      # without a second round-trip.
+      account_info_body_file=$(mktemp)
+      api_status=$(curl -s -o "$account_info_body_file" -w "%{http_code}" \
         -H "Authorization: Bearer $token" \
         "https://api.hubapi.com/account-info/v3/details") || api_curl_exit=$?
       # Skip subsequent calls if the first failed to reach the server.
@@ -316,6 +341,16 @@ else
             -H "Content-Type: application/json" \
             -d "{\"tokenKey\":\"$token\"}" \
             "https://api.hubapi.com/oauth/v2/private-apps/get/access-token-info") || scopes_curl_exit=$?
+
+          # Domain-connection probe — surfaces the "DOMAIN not connected to
+          # HubSpot" failure mode before terraform apply rather than after a
+          # confusing temp-slug deploy. Only meaningful for projects in
+          # custom-domain hosting modes; system-domain and iframe consumers
+          # still get a result but the skill ignores it (it knows the mode).
+          domains_body_file=$(mktemp)
+          domains_status=$(curl -s -o "$domains_body_file" -w "%{http_code}" \
+            -H "Authorization: Bearer $token" \
+            "https://api.hubapi.com/cms/v3/domains") || domains_curl_exit=$?
         fi
       fi
     else
@@ -333,6 +368,7 @@ else
 
       if [[ $api_curl_exit -ne 0 ]]; then
         echo "PREFLIGHT_API_ACCESS=unreachable curl exited with code $api_curl_exit (network, DNS, or TLS failure reaching api.hubapi.com)"
+        echo "PREFLIGHT_TIER=skipped (API unreachable)"
         echo "PREFLIGHT_SCOPES=skipped (API unreachable)"
         echo "PREFLIGHT_PROJECT_SOURCE=skipped (API unreachable)"
         required_failed=1
@@ -355,20 +391,31 @@ else
             ;;
         esac
 
+        # --- TIER ---
+        # Classify portal tier from /account-info/v3/details body. Drives
+        # tier-aware required-scope set in the SCOPES block immediately after.
+        # The classifier ships informed-guess accountType mappings; verify
+        # against real portals (see scripts/lib/tier-classify.sh TODO).
+        tier="unknown"
+        if [[ "$api_status" == "200" ]] && [[ -n "$account_info_body_file" ]] && [[ -f "$account_info_body_file" ]]; then
+          tier=$(classify_tier_from_account_details "$(cat "$account_info_body_file")")
+          echo "PREFLIGHT_TIER=$tier"
+        else
+          echo "PREFLIGHT_TIER=skipped (API access failed)"
+        fi
+
         # SCOPES and PROJECT_SOURCE only run if API access itself is healthy.
         if [[ "$api_status" == "200" ]]; then
           # --- SCOPES ---
           # Introspection endpoint returns JSON: {"userId":...,"hubId":...,"appId":...,"scopes":[...]}
           # We compute: required - granted. Empty → ok; non-empty → missing <list>.
-          required_scopes=(
-            crm.objects.contacts.read
-            crm.objects.contacts.write
-            crm.schemas.contacts.write
-            crm.lists.read
-            crm.lists.write
-            forms
-            content
-          )
+          # Required-scope set is tier-aware: starter needs 7 base scopes;
+          # pro/ent add marketing-email; ent+tx adds transactional-email.
+          # See scripts/lib/tier-classify.sh::required_scopes_for_tier.
+          required_scopes=()
+          while IFS= read -r _scope; do
+            [[ -n "$_scope" ]] && required_scopes+=("$_scope")
+          done < <(required_scopes_for_tier "$tier")
           if [[ $scopes_curl_exit -ne 0 ]]; then
             echo "PREFLIGHT_SCOPES=error curl exited with code $scopes_curl_exit on scopes introspection"
             required_failed=1
@@ -402,7 +449,14 @@ except Exception:
             done
 
             if [[ ${#missing_scopes[@]} -eq 0 ]]; then
-              echo "PREFLIGHT_SCOPES=ok"
+              # Distinguish starter (no marketing-email/transactional-email
+              # is *expected*, not just a passing baseline) so the skill
+              # can coach manual UI publish without re-checking tier.
+              if [[ "$tier" == "starter" ]]; then
+                echo "PREFLIGHT_SCOPES=ok-starter"
+              else
+                echo "PREFLIGHT_SCOPES=ok"
+              fi
             else
               missing_csv=$(IFS=,; echo "${missing_scopes[*]}")
               echo "PREFLIGHT_SCOPES=missing $missing_csv"
@@ -439,6 +493,7 @@ except Exception:
       echo "PREFLIGHT_CREDENTIAL=empty Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' exists but its value is blank"
       echo "  Re-add it with: security add-generic-password -U -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'"
       echo "PREFLIGHT_API_ACCESS=skipped (credential empty)"
+      echo "PREFLIGHT_TIER=skipped (credential empty)"
       echo "PREFLIGHT_SCOPES=skipped (credential empty)"
       echo "PREFLIGHT_PROJECT_SOURCE=skipped (credential empty)"
       required_failed=1
@@ -447,6 +502,7 @@ except Exception:
       echo "PREFLIGHT_CREDENTIAL=missing Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' not found"
       echo "  Add it with: security add-generic-password -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'"
       echo "PREFLIGHT_API_ACCESS=skipped (no credential)"
+      echo "PREFLIGHT_TIER=skipped (no credential)"
       echo "PREFLIGHT_SCOPES=skipped (no credential)"
       echo "PREFLIGHT_PROJECT_SOURCE=skipped (no credential)"
       required_failed=1
@@ -489,6 +545,49 @@ else
     echo "PREFLIGHT_DNS=missing $DOMAIN does not resolve (expected CNAME target: $expected_cname)"
     required_failed=1
   fi
+fi
+
+# --- DOMAIN_CONNECTED ---
+# Result of the /cms/v3/domains probe captured during the credential block.
+# Tells the skill whether the project's DOMAIN is actually connected in the
+# portal as a primary landing-page domain — the temp-slug failure mode v1.6.5
+# documented happens when DOMAIN isn't connected and HubSpot falls back to a
+# system subdomain without warning. Emits one of:
+#   ok          — DOMAIN present and isUsedForLandingPage:true
+#   not-primary — DOMAIN present but not primary for landing pages
+#   missing     — DOMAIN not in /cms/v3/domains at all
+#   skipped     — credential/api unavailable, or DOMAIN unset
+#   error       — API call hit a transport or unexpected-status problem
+# The result is informational: skills consuming it know the project's hosting
+# mode (custom-domain-primary vs system-domain vs iframe) from their own state
+# and can interpret accordingly. We don't gate the framework on this — Heard
+# saw deploys succeed with the wrong domain config, just with temp slugs.
+if [[ -z "${DOMAIN:-}" ]]; then
+  echo "PREFLIGHT_DOMAIN_CONNECTED=skipped (DOMAIN not set)"
+elif [[ "$domains_status" == "000" ]]; then
+  echo "PREFLIGHT_DOMAIN_CONNECTED=skipped (no API access)"
+elif [[ "$domains_curl_exit" -ne 0 ]]; then
+  echo "PREFLIGHT_DOMAIN_CONNECTED=error curl exited with code $domains_curl_exit on /cms/v3/domains"
+elif [[ "$domains_status" != "200" ]]; then
+  echo "PREFLIGHT_DOMAIN_CONNECTED=error /cms/v3/domains returned HTTP $domains_status"
+else
+  domain_match=$(jq -r --arg d "$DOMAIN" '
+    .results[]? | select(.domain == $d) |
+      if (.isUsedForLandingPages // .isUsedForPages // false) then "primary"
+      else "secondary"
+      end
+  ' "$domains_body_file" 2>/dev/null | head -n 1)
+  case "$domain_match" in
+    primary)
+      echo "PREFLIGHT_DOMAIN_CONNECTED=ok"
+      ;;
+    secondary)
+      echo "PREFLIGHT_DOMAIN_CONNECTED=not-primary $DOMAIN connected but not flagged for landing pages"
+      ;;
+    *)
+      echo "PREFLIGHT_DOMAIN_CONNECTED=missing $DOMAIN not present in /cms/v3/domains"
+      ;;
+  esac
 fi
 
 # --- Warnings (non-blocking) ---

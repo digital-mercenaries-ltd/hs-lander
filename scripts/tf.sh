@@ -38,6 +38,9 @@ export TF_VAR_landing_slug="${LANDING_SLUG:-}"
 export TF_VAR_thankyou_slug="${THANKYOU_SLUG:-thank-you}"
 export TF_VAR_hubspot_subscription_id="${HUBSPOT_SUBSCRIPTION_ID:-}"
 export TF_VAR_hubspot_office_location_id="${HUBSPOT_OFFICE_LOCATION_ID:-}"
+export TF_VAR_email_preview_text="${EMAIL_PREVIEW_TEXT:-}"
+export TF_VAR_auto_publish_welcome_email="${AUTO_PUBLISH_WELCOME_EMAIL:-true}"
+export TF_VAR_include_bottom_cta="${INCLUDE_BOTTOM_CTA:-true}"
 
 # Run terraform
 exec terraform -chdir="$PROJECT_DIR/terraform" "$@"

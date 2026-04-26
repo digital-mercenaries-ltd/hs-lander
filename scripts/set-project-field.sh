@@ -8,8 +8,14 @@
 # Allowed keys (project-profile schema):
 #   PROJECT_SLUG, DOMAIN, DM_UPLOAD_PATH, GA4_MEASUREMENT_ID,
 #   CAPTURE_FORM_ID, SURVEY_FORM_ID, LIST_ID,
-#   LANDING_SLUG, THANKYOU_SLUG, HOSTING_MODE_HINT,
-#   HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID
+#   LANDING_SLUG, THANKYOU_SLUG,
+#   HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID,
+#   EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL, INCLUDE_BOTTOM_CTA
+#
+# v1.7.0: HOSTING_MODE_HINT removed (was skill-only state, lives in
+# <project>.skillstate.sh now). EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL,
+# INCLUDE_BOTTOM_CTA added — all map to module variables via tf.sh exports
+# (defaults preserve v1.6.7 behaviour for projects that don't set them).
 #
 # Unknown keys are rejected (prevents typos creating zombie variables).
 # Account-level credential fields (e.g. HUBSPOT_TOKEN_KEYCHAIN_SERVICE) are
@@ -38,9 +44,11 @@ ALLOWED_KEYS=(
   LIST_ID
   LANDING_SLUG
   THANKYOU_SLUG
-  HOSTING_MODE_HINT
   HUBSPOT_SUBSCRIPTION_ID
   HUBSPOT_OFFICE_LOCATION_ID
+  EMAIL_PREVIEW_TEXT
+  AUTO_PUBLISH_WELCOME_EMAIL
+  INCLUDE_BOTTOM_CTA
 )
 
 _is_allowed_key() {

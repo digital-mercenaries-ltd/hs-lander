@@ -138,6 +138,86 @@ if [[ -n "${WELCOME_EMAIL_ID:-}" ]]; then
   widget_placed=$(echo "$email_json" \
     | jq -r '[.content.flexAreas.main.sections[].columns[].widgets[]?] | any(. == "primary_rich_text_module")')
   assert_equal "$widget_placed" "true" "primary_rich_text_module is placed in flexAreas layout"
+
+  # v1.7.0 check 6: preview_text widget populated when EMAIL_PREVIEW_TEXT is
+  # set. When empty, widget renders without preview line and clients fall
+  # back to first body line — accepted state, no assertion fails.
+  if [[ -n "${EMAIL_PREVIEW_TEXT:-}" ]]; then
+    preview_text_value=$(echo "$email_json" \
+      | jq -r '.content.widgets.preview_text.body.value // ""')
+    if [[ "$preview_text_value" == "$EMAIL_PREVIEW_TEXT" ]]; then
+      assert_equal "true" "true" "preview_text widget value matches EMAIL_PREVIEW_TEXT"
+    else
+      assert_equal "true" "false" "preview_text widget value matches EMAIL_PREVIEW_TEXT (got '$preview_text_value')"
+    fi
+  fi
+fi
+
+# v1.7.0 served-page checks — these depend on the HubL scaffold rewrite, so
+# they're meaningful only against projects deployed under v1.7.0+ scaffold.
+# A pre-v1.7.0 project (raw-HTML scaffold) will fail these by design — the
+# point is to catch scaffold-drift back to static HTML.
+
+# Check 1 (v1.7.0): CSS asset returns 200. Extract the URL from served HTML
+# and probe directly. Catches broken upload paths, missing files, scaffold
+# not rewritten.
+echo ""
+echo "--- Served-asset checks (v1.7.0 scaffold) ---"
+
+css_url=$(grep -oE 'href="[^"]*main\.css[^"]*"' "$LANDING_HTML_FILE" | head -n 1 | sed -E 's/^href="//; s/"$//')
+if [[ -n "$css_url" ]]; then
+  # Resolve protocol-relative or relative URLs against the landing URL.
+  case "$css_url" in
+    //*)  css_url="https:$css_url" ;;
+    /*)   css_url="https://${DOMAIN}${css_url}" ;;
+    http*) ;;
+    *)    css_url="$LANDING_URL/$css_url" ;;
+  esac
+  css_status=$(curl -s -o /dev/null -w "%{http_code}" "$css_url")
+  assert_equal "$css_status" "200" "main.css served from $css_url returns 200"
+else
+  echo "  SKIP: no main.css URL found in served landing HTML"
+fi
+
+# Check 2 (v1.7.0): hub_generated/template_assets URL present. Confirms HubL
+# get_asset_url() compiled into a HubSpot served-asset path. Static-HTML
+# templates (missing templateType: page annotation) won't have this.
+assert_file_contains "$LANDING_HTML_FILE" "hub_generated/template_assets" \
+  "served HTML contains hub_generated/template_assets URL (HubL compilation worked)"
+
+# Check 3 (v1.7.0): scriptloader script-tag present. standard_header_includes
+# emits this; without it forms degrade silently.
+assert_file_contains "$LANDING_HTML_FILE" "/hs/scriptloader/${HUBSPOT_PORTAL_ID}.js" \
+  "served HTML contains /hs/scriptloader/<portal>.js (standard_header_includes fired)"
+
+# Check 4 (v1.7.0): prefers-color-scheme block in fetched CSS. Catches
+# minification stripping the @media block or scaffold drift back to single-mode.
+if [[ -n "$css_url" ]] && [[ "$css_status" == "200" ]]; then
+  CSS_FILE=$(mktemp)
+  trap 'rm -f "$LANDING_HTML_FILE" "$THANKYOU_HTML_FILE" "$LANDING_TOKENS_DIR" "$THANKYOU_TOKENS_DIR" "$CSS_FILE"' EXIT
+  curl -s "$css_url" > "$CSS_FILE"
+  assert_file_contains "$CSS_FILE" "prefers-color-scheme" \
+    "served CSS contains @media (prefers-color-scheme: dark) block"
+fi
+
+# Check 5 (v1.7.0): templateType: page annotation persists in served-template
+# metadata. The annotation is stripped from served HTML (it's a HubL comment),
+# but the source-code metadata API exposes it. Catches scaffold drift back
+# to static HTML.
+if [[ -n "${DM_UPLOAD_PATH:-}" ]]; then
+  template_meta=$(curl -s \
+    -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
+    "https://api.hubapi.com/cms/v3/source-code/published/metadata${DM_UPLOAD_PATH}/templates/landing-page.html")
+  template_type=$(echo "$template_meta" | jq -r '.templateType // ""')
+  # HubSpot returns the annotation value (e.g. "PAGE" or "page" — case may vary).
+  case "$(echo "$template_type" | tr '[:upper:]' '[:lower:]')" in
+    page)
+      assert_equal "true" "true" "landing-page.html declares templateType: page"
+      ;;
+    *)
+      assert_equal "page" "$template_type" "landing-page.html declares templateType: page"
+      ;;
+  esac
 fi
 
 test_summary
