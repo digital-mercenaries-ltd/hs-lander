@@ -57,7 +57,7 @@ domains_body_file=""
 # (status="000") regardless of which early-exit branch ran.
 domains_status="000"
 domains_curl_exit=0
-trap 'unset token; for _f in "$scopes_body_file" "$account_info_body_file" "$domains_body_file"; do [[ -n "$_f" ]] && rm -f "$_f"; done' EXIT
+trap 'unset token; rm -f "$scopes_body_file" "$account_info_body_file" "$domains_body_file"' EXIT
 
 # Tier classifier — sourced for classify_tier_from_account_details() and
 # required_scopes_for_tier(). Lives in lib/ so the surface stays cohesive
