@@ -81,9 +81,12 @@ resource "restapi_object" "capture_form" {
           ]
         }
       ],
-      # 3. Segmentation group — project_source, hidden in the rendered
-      #    form via scaffold CSS. Kept as single_line_text because
-      #    Forms v3 rejects fieldType = "hidden".
+      # 3. Segmentation group — project_source, hidden via the canonical
+      #    form-level `hidden: true` flag (HubSpot's documented mechanism
+      #    on Forms v3). Scaffold CSS adds belt-and-braces selectors for
+      #    portals where v3 markup hasn't fully propagated. Kept as
+      #    single_line_text because `fieldType = "hidden"` is deprecated
+      #    and rejected on Forms v3 — do not revive it.
       [
         {
           groupType    = "default_group"
@@ -94,6 +97,7 @@ resource "restapi_object" "capture_form" {
               label        = "Project Source"
               fieldType    = "single_line_text"
               objectTypeId = "0-1"
+              hidden       = true
               defaultValue = var.project_slug
             }
           ]
@@ -160,9 +164,12 @@ resource "restapi_object" "survey_form" {
           ]
         }
       ],
-      # 3. Segmentation group — project_source, hidden in the rendered
-      #    form via scaffold CSS. Kept as single_line_text because
-      #    Forms v3 rejects fieldType = "hidden".
+      # 3. Segmentation group — project_source, hidden via the canonical
+      #    form-level `hidden: true` flag (HubSpot's documented mechanism
+      #    on Forms v3). Scaffold CSS adds belt-and-braces selectors for
+      #    portals where v3 markup hasn't fully propagated. Kept as
+      #    single_line_text because `fieldType = "hidden"` is deprecated
+      #    and rejected on Forms v3 — do not revive it.
       [
         {
           groupType    = "default_group"
@@ -173,6 +180,7 @@ resource "restapi_object" "survey_form" {
               label        = "Project Source"
               fieldType    = "single_line_text"
               objectTypeId = "0-1"
+              hidden       = true
               defaultValue = var.project_slug
             }
           ]
