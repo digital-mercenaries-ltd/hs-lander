@@ -6,11 +6,10 @@ Items beyond the shipped framework. Each reduces manual steps or expands capabil
 
 What's actively being worked on or is expected next. Updated when releases ship; kept short so readers can see the near-term focus at a glance.
 
-- **v1.7.1 ship** — surgical bug fixes: `tests/test-deployment.sh` EXIT-trap (rm -f → rm -rf for `mktemp -d` paths so v1.7.0's served-asset checks actually run), remove the misleading `include_bottom_cta` advisory variable, correct the v1.6.7 PATCH-strip migration note (PATCH preserves `flexAreas` if structure is complete), ship `scripts/upgrade-project-scripts.sh` (R9 — first slice). Plan: `2026-04-27-v1.7.1-bugfixes-and-script-refresh.md`.
-- **v1.8.0 ship** — substantial: extend `survey_fields` schema with `dropdown` / `multiple_checkboxes` / `radio` types + `options` + "Other" overflow; extend `custom_properties` with `enumeration` / `bool` / `number` types; ship `scaffold/src/js/survey-submit.js` for the Forms Submissions API path on the static thank-you survey form; capture form `postSubmitAction` defaults to `redirect_url` with `{{email}}` merge token; auto-add `<slug>_survey_completed` boolean when `include_survey = true`; new `PREFLIGHT_EMAIL_DNS` (typed `dig CNAME`, regional SPF includes, mechanism-order check); schema-alignment test in `tests/test-deployment.sh` (static form names ↔ HubSpot form ↔ `custom_properties` three-way diff). Plan: `2026-04-27-v1.8.0-survey-schema-and-email-dns.md`. Paired skill plan: `2026-04-27-skill-v1.8.0-adoption-survey-and-email.md` in skills repo.
-- **R8 — Preflight HubSpot Domain Connection Check** (plan written, implementation pending). Closes the domain-verification gap and simplifies the skill's hosting-mode handling. Mostly subsumed by v1.7.0's `PREFLIGHT_DOMAIN_CONNECTED` emit; revisit whether R8 still has unique scope.
-- **Plan-review gate + state-backup safeguards** (plans written, pending). Not blocking; worth landing before the next live deploy to reduce blast-radius risk on misconfigured plans.
-- **R5 — Subscription check in preflight** (plan still to be written). Useful before anyone tries a fresh account deploy. Consider bundling with the subscription/office-location ID auto-discovery (scope-change).
+- **v1.8.1 ship — codex review fixes (plan to write next).** Surgical patch addressing the v1.8.0 codex review findings: `scaffold/terraform/main.tf` module pin bump from `?ref=v1.6.0`; add `auto_publish_welcome_email` + `email_preview_text` variable declarations to scaffold root and wire them through to `module.landing_page`; make `EMAIL_REPLY_TO` reachable in preflight (extractor + `set-project-field.sh` allow-list — currently dead code); regenerate `account-setup/.terraform.lock.hcl` against `~> 2.0`; centralise account/project name validation; honour `HS_LANDER_CONFIG_DIR` in `post-apply.sh`; sed-escape replacement values in `build.sh`; CI shellcheck recurse into `scripts/lib/`. Plus `docs/framework.md` + `CLAUDE.md` re-sync to v1.8.0 reality (provider version, scope set, removed `HOSTING_MODE_HINT`, missing `__PROJECT_SLUG__` token, current preflight contract length). Plan to write: `docs/superpowers/plans/2026-04-27-v1.8.1-codex-review-fixes.md`.
+- **v1.9.0 — safety + structure (plans written, pending).** `plan-review-gate.md` + `backup-state-and-profiles.md` (the safety pair) ship together. Adds `scripts/plan-review.sh` emitting `PLAN_REVIEW=ok|confirm` + severity, modifies `tf.sh apply` to require a saved plan file, adds `scripts/backup-file.sh` with timestamped backups before every apply / post-apply mutation. Plus `scripts/lib/` consolidation (Keychain reader with xtrace baked in, sed portability, var extractor, validators) and `preflight.sh` decomposition (the maintainer concern at >700 lines is now triggered).
+- **v1.9.1 — operator ergonomics + tests (plans to write).** R9 sub-items 2 + 3 (`migrate-project.sh`, `projects-describe.sh` — the version-drift warning closes the recurrence path of the v1.8.1 scaffold-pin defect). Scaffold-to-plan test that exercises `scaffold/terraform/main.tf` not `tests/fixtures/terraform/main.tf`. `VERSION.compat` maintenance process + CI guard.
+- **v2.0 — breaking-change bundle (plans to write).** R5 main + scope auto-discovery (7 → 8 scopes; pre-designed migration messaging including a one-off `PREFLIGHT_SCOPES=mismatch-needs-rotation` transition state). Output-contract vocabulary normalisation across all scripts (nine prefix shapes + 22 state values → unified). Migration consolidation doc ("from any v1.x → v2.0"). Plans archive cull (close R3 permanently, close R8 explicitly).
 
 ## Deferred / awaiting trigger
 
@@ -42,7 +41,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | R5 | HubSpot Subscription Check in Preflight (+ subscription/office-location ID auto-discovery) | TBD (1.x) | Planned |
 | R6 | HubSpot API Contract Monitoring | TBD (1.x / 2.x split) | Planned; plan pending |
 | R7 | S3 Iframe Wrapper Hosting Mode | TBD (1.x) | Niche; plan pending |
-| R8 | Preflight HubSpot Domain Connection Check | TBD (1.x) | Plan written (`2026-04-22-preflight-domain-hubspot-check.md`) |
+| R8 | Preflight HubSpot Domain Connection Check | — | Superseded by v1.7.0's `PREFLIGHT_DOMAIN_CONNECTED`. Original plan archived at `archive/2026-04-22-preflight-domain-hubspot-check.md`. Residual `scripts/lib/hosting-mode.sh` helper folded into v1.9.0's lib consolidation if pursued. To close in v2.0 unless reopened. |
 | R9 | Operator Ergonomics (version drift, migrate-project, projects-describe) | TBD (1.x) | Planned |
 | R10 | Skill Hygiene Rule 6 (no preemptive inspection) | TBD (skill-only) | Conditional on pattern recurrence |
 | R11 | CI/CD with GitHub Secrets | TBD (2.x) | Planned |
@@ -360,15 +359,16 @@ Both mechanisms are useful. Neither is redundant.
 
 ---
 
-## R8: Preflight HubSpot Domain Connection Check
+## R8: Preflight HubSpot Domain Connection Check (SUPERSEDED)
 
-**Current state:** `preflight.sh` checks DNS resolution (`PREFLIGHT_DNS`) but has no check for whether the target domain is actually connected in HubSpot. For custom-domain-primary mode, a domain with DNS in place but not yet connected in HubSpot UI causes the landing page to be created at a UUID slug instead of the expected root URL (observed on Heard, 2026-04-22, before the hosting-modes plan proposed switching Heard to system-domain mode).
+**Status:** Superseded by v1.7.0. The substantive design — a preflight check that probes `/cms/v3/domains` for the target domain and emits a structured state — shipped as `PREFLIGHT_DOMAIN_CONNECTED` in v1.7.0. The original plan is archived at `docs/superpowers/plans/archive/2026-04-22-preflight-domain-hubspot-check.md` for historical reference of the original design rationale.
 
-**Goal:** A new `PREFLIGHT_DOMAIN_HUBSPOT` preflight line that checks `/cms/v3/domains` for the target domain, verifies it's connected, and in custom-domain modes verifies `isPrimaryLandingPage: true` with a `primaryLandingPageId` set.
+**Residual work:** two pieces of the original plan did not ship and are partly obsolete:
 
-**Status:** Plan written: `docs/superpowers/plans/2026-04-22-preflight-domain-hubspot-check.md`. Implementation pending.
+1. **`scripts/lib/hosting-mode.sh`** helper that resolves hosting mode from `DOMAIN` (custom-domain-primary | system-domain | system-domain-redirect | system-domain-iframe). Worth pursuing as a small lib extraction; folded into v1.9.0's `scripts/lib/` consolidation if pursued at all.
+2. **Mode-aware skipping** of the domain probe for system-domain modes. The original design depended on `HOSTING_MODE_HINT` to distinguish redirect from iframe sub-variants; that field was removed in v1.7.0 (skill-only state now). The skill — which has its own state — distinguishes the sub-variants today. Without `HOSTING_MODE_HINT`, the framework cannot.
 
-**Scope coverage:** closes the domain-connection gap at preflight rather than waiting for deploy to fail. Subsumes the check that the skill currently does via a post-preflight `hs-curl.sh` call in the hosting-modes skill plan — once this lands, the skill just reads the preflight output.
+**Disposition:** to close in v2.0 unless a fresh consumer-need re-opens the residual scope. If reopened, write a new mini-plan; this one's substantive design is no longer the right starting point.
 
 ---
 

@@ -1,10 +1,16 @@
 # Plan: Preflight HubSpot Domain Connection Check
 
 **Date:** 2026-04-22
-**Status:** Pending
-**Scope:** Framework. Adds a new `PREFLIGHT_DOMAIN_HUBSPOT` line to `preflight.sh` output, covering domain-connection state and primary-page flag verification in HubSpot.
-**Roadmap reference:** v1.8
-**Target release:** v1.5.x (same scope-expansion release as subscription check) or standalone v1.4.x patch.
+**Status:** Superseded — most of the design shipped in v1.7.0 as `PREFLIGHT_DOMAIN_CONNECTED` (probes `/cms/v3/domains` for the project's `DOMAIN`, emits `ok | not-primary | missing | skipped | error`). Two pieces of this plan did not ship and are partly obsolete:
+**Roadmap reference:** R8
+
+1. **`scripts/lib/hosting-mode.sh`** helper that resolves hosting mode from `DOMAIN` (custom-domain-primary | system-domain | system-domain-redirect | system-domain-iframe). Worth pursuing as a small lib extraction, but not on its own — fold into the `scripts/lib/` consolidation work queued for v1.9.
+2. **Mode-aware skipping** of the domain probe for system-domain modes. The plan's design depended on `HOSTING_MODE_HINT` to distinguish redirect from iframe sub-variants; that field was removed in v1.7.0 (skill-only state now). Without it, the framework cannot distinguish the system-domain sub-variants — the skill, which has its own state, does. Parking until R8 needs revisiting.
+
+The R8 roadmap entry should be marked superseded in `docs/roadmap.md`. If a fresh mini-plan covering only the residual work is wanted, write it then; this plan's substantive design is no longer the right starting point.
+
+**Target release:** N/A — superseded by v1.7.0.
+**v1.8.1 archive note:** moved to `archive/` during the v1.8.1 plan-archive sweep. Kept for historical reference of the original design rationale.
 
 ## Context
 
