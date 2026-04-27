@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 40-credential.sh — emits PREFLIGHT_CREDENTIAL.
 #
 # Reads: account_profile_ok, project_pointer_ok, pointer_skip_reason,

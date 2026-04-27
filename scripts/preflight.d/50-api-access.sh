@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 50-api-access.sh — emits PREFLIGHT_API_ACCESS.
 #
 # Reads: credential_ok, credential_skip_reason, api_status, api_curl_exit.

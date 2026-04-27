@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 95-form-ids.sh — emits PREFLIGHT_FORM_IDS.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason,

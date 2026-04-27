@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 00-tools-required.sh — emits PREFLIGHT_TOOLS_REQUIRED.
-# Sourced by scripts/preflight.sh; never invoked directly. Shebang is for
-# shellcheck dialect detection only.
+# Sourced by scripts/preflight.sh; never invoked directly. The shebang above
+# exists so static analysis can detect the bash dialect.
 #
 # Runs first so tool availability is reported even when config is unset.
 # `command -v` is safe under xtrace — no secrets expanded here.

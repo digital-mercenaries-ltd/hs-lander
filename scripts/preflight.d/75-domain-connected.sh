@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 75-domain-connected.sh — emits PREFLIGHT_DOMAIN_CONNECTED.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason, DOMAIN,

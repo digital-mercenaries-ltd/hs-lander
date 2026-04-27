@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 60-scopes.sh — emits PREFLIGHT_SCOPES.
 #
 # Reads: credential_ok, credential_skip_reason, api_curl_exit, api_status,

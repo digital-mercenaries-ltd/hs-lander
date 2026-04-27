@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 20-account-profile.sh — emits PREFLIGHT_ACCOUNT_PROFILE.
 #
 # Reads: project_pointer_ok, pointer_skip_reason, HS_LANDER_ACCOUNT.

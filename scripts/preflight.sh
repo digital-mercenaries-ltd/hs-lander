@@ -74,36 +74,59 @@ unset _preflight_version_file _framework_version
 
 # --- Shared state (interface between check files) ---
 # Documented in preflight.d/README.md. Each check file reads any of these it
-# depends on and writes the one(s) it owns.
+# depends on and writes the one(s) it owns. shellcheck flags every variable
+# below as "appears unused" because the consumers live in sourced check files
+# under preflight.d/ that it can't follow from here. The per-assignment
+# disables acknowledge the cross-file interface.
+# shellcheck disable=SC2034  # PROJECT_DIR consumed by check files
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 required_failed=0
+# shellcheck disable=SC2034
 tools_required_ok=0
+# shellcheck disable=SC2034
 project_pointer_ok=0
+# shellcheck disable=SC2034
 account_profile_ok=0
+# shellcheck disable=SC2034
 project_profile_ok=0
+# shellcheck disable=SC2034
 credential_ok=0
+# shellcheck disable=SC2034
 api_access_ok=0
+# shellcheck disable=SC2034
 tier="unknown"
+# shellcheck disable=SC2034
 token=""
 
 # Cascading skip-reason markers. Each gate-check sets these when it fails so
 # downstream checks can emit a precise "skipped (<reason>)" line that points
 # the skill at the upstream root cause. Empty when the gate is satisfied.
+# shellcheck disable=SC2034
 pointer_skip_reason=""        # set by 10-project-pointer.sh
+# shellcheck disable=SC2034
 credential_skip_reason=""     # set by 40-credential.sh (or upstream)
+# shellcheck disable=SC2034
 api_skip_reason=""            # set by 50-api-access.sh (or upstream)
 
 # API probe results (populated by 40-credential.sh, consumed by 50-api-access.sh,
 # 55-tier.sh, 60-scopes.sh, 65-project-source.sh, 75-domain-connected.sh).
+# shellcheck disable=SC2034
 api_status="000"
+# shellcheck disable=SC2034
 api_curl_exit=0
+# shellcheck disable=SC2034
 ps_status="000"
+# shellcheck disable=SC2034
 ps_curl_exit=0
+# shellcheck disable=SC2034
 scopes_status="000"
+# shellcheck disable=SC2034
 scopes_curl_exit=0
 scopes_body_file=""
 account_info_body_file=""
+# shellcheck disable=SC2034
 domains_status="000"
+# shellcheck disable=SC2034
 domains_curl_exit=0
 domains_body_file=""
 

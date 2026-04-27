@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 99-tools-optional.sh — emits PREFLIGHT_TOOLS_OPTIONAL.
 #
 # Reads: tools_required_ok.

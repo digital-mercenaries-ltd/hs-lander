@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154,SC2317
 # 10-project-pointer.sh — emits PREFLIGHT_PROJECT_POINTER.
 #
 # Reads: tools_required_ok.
