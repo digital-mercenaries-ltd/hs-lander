@@ -237,9 +237,10 @@ assert_file_contains "$TMP12/dml/heard.sh" '^THANKYOU_SLUG="thanks"$' "THANKYOU_
 assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_SUBSCRIPTION_ID="2269639338"$' "HUBSPOT_SUBSCRIPTION_ID written"
 assert_file_contains "$TMP12/dml/heard.sh" '^HUBSPOT_OFFICE_LOCATION_ID="375327044798"$' "HUBSPOT_OFFICE_LOCATION_ID written"
 
-# --- Scenario 13: v1.7.0 allow-list extensions accepted ---
-# EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL, INCLUDE_BOTTOM_CTA all
-# added in v1.7.0 for the welcome-email anatomy and tier-aware publish gate.
+# --- Scenario 13: v1.7.0 allow-list extensions accepted (sans INCLUDE_BOTTOM_CTA) ---
+# EMAIL_PREVIEW_TEXT and AUTO_PUBLISH_WELCOME_EMAIL added in v1.7.0.
+# INCLUDE_BOTTOM_CTA was removed in v1.7.1 (was advisory-only; consumers were
+# misled into setting false expecting effect — Scenario 15 verifies rejection).
 echo ""
 echo "--- Scenario 13: v1.7.0 allow-list extensions ---"
 TMP13=$(mktemp -d)
@@ -247,13 +248,11 @@ seed_profile "$TMP13"
 exit13=$(run "$TMP13" "$TMP13/log" dml heard \
   EMAIL_PREVIEW_TEXT="You are in. Reply with one word: ready or curious." \
   AUTO_PUBLISH_WELCOME_EMAIL="false" \
-  INCLUDE_BOTTOM_CTA="true" \
   || true)
 assert_equal "$exit13" "0" "exit 0 with v1.7.0 keys"
 assert_file_contains "$TMP13/log" "^SET_FIELD=ok$" "[Scenario 13] ok terminator emitted"
 assert_file_contains "$TMP13/dml/heard.sh" '^EMAIL_PREVIEW_TEXT="You are in. Reply with one word: ready or curious.\"$' "EMAIL_PREVIEW_TEXT written"
 assert_file_contains "$TMP13/dml/heard.sh" '^AUTO_PUBLISH_WELCOME_EMAIL="false"$' "AUTO_PUBLISH_WELCOME_EMAIL written"
-assert_file_contains "$TMP13/dml/heard.sh" '^INCLUDE_BOTTOM_CTA="true"$' "INCLUDE_BOTTOM_CTA written"
 
 # --- Scenario 14: HOSTING_MODE_HINT rejected (v1.7.0 removal) ---
 # HOSTING_MODE_HINT was removed from the allow-list in v1.7.0 because the
@@ -267,5 +266,18 @@ seed_profile "$TMP14"
 exit14=$(run "$TMP14" "$TMP14/log" dml heard HOSTING_MODE_HINT="redirect" || true)
 assert_equal "$exit14" "1" "[Scenario 14] exit 1 when HOSTING_MODE_HINT is set"
 assert_file_contains "$TMP14/log" "^SET_FIELD=error unknown-key HOSTING_MODE_HINT$" "[Scenario 14] unknown-key error emitted"
+
+# --- Scenario 15: INCLUDE_BOTTOM_CTA rejected (v1.7.1 removal) ---
+# Variable was advisory-only in v1.7.0 (scaffold hardcoded the bottom CTA),
+# misleading consumers who set false expecting it to disappear. Removed in
+# v1.7.1 — verify a stale skill clinging to the key fails loudly.
+echo ""
+echo "--- Scenario 15: INCLUDE_BOTTOM_CTA rejected (v1.7.1) ---"
+TMP15=$(mktemp -d)
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMP7:-}" "${TMP8:-}" "${TMP9:-}" "${TMP10:-}" "${TMP11:-}" "${TMP12:-}" "${TMP13:-}" "${TMP14:-}" "${TMP15:-}"' EXIT
+seed_profile "$TMP15"
+exit15=$(run "$TMP15" "$TMP15/log" dml heard INCLUDE_BOTTOM_CTA="false" || true)
+assert_equal "$exit15" "1" "[Scenario 15] exit 1 when INCLUDE_BOTTOM_CTA is set"
+assert_file_contains "$TMP15/log" "^SET_FIELD=error unknown-key INCLUDE_BOTTOM_CTA$" "[Scenario 15] unknown-key error emitted"
 
 test_summary

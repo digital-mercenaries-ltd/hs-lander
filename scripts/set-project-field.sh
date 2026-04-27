@@ -10,12 +10,15 @@
 #   CAPTURE_FORM_ID, SURVEY_FORM_ID, LIST_ID,
 #   LANDING_SLUG, THANKYOU_SLUG,
 #   HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID,
-#   EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL, INCLUDE_BOTTOM_CTA
+#   EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL
 #
 # v1.7.0: HOSTING_MODE_HINT removed (was skill-only state, lives in
 # <project>.skillstate.sh now). EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL,
 # INCLUDE_BOTTOM_CTA added — all map to module variables via tf.sh exports
 # (defaults preserve v1.6.7 behaviour for projects that don't set them).
+# v1.7.1: INCLUDE_BOTTOM_CTA removed (variable was advisory-only and
+# consumers were misled into setting false expecting effect; the scaffold
+# template's bottom CTA is edited directly to opt out).
 #
 # Unknown keys are rejected (prevents typos creating zombie variables).
 # Account-level credential fields (e.g. HUBSPOT_TOKEN_KEYCHAIN_SERVICE) are
@@ -48,7 +51,6 @@ ALLOWED_KEYS=(
   HUBSPOT_OFFICE_LOCATION_ID
   EMAIL_PREVIEW_TEXT
   AUTO_PUBLISH_WELCOME_EMAIL
-  INCLUDE_BOTTOM_CTA
 )
 
 _is_allowed_key() {

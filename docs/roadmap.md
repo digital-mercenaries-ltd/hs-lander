@@ -2,22 +2,26 @@
 
 Items beyond the shipped framework. Each reduces manual steps or expands capability.
 
-## Currently on deck (2026-04-22)
+## Currently on deck (2026-04-27)
 
 What's actively being worked on or is expected next. Updated when releases ship; kept short so readers can see the near-term focus at a glance.
 
-- **v1.5.0 ship (PR #11)** — finish email restructure + hosting-modes plumbing (covers partial R-work — not a single-R item). Blocks Heard re-deploy.
-- **v1.6.0 ship** — three more API-drift fixes surfaced by Heard's v1.5.0 apply (welcome-email PATCH, Forms hidden-field, Lists response-wrapping). Non-breaking. Unblocks Heard re-deploy once user cleans up the orphan list (`listId: 21`).
-- **R8 — Preflight HubSpot Domain Connection Check** (plan written, implementation pending). Closes the domain-verification gap and simplifies the skill's hosting-mode handling.
-- **Plan-review gate + state-backup safeguards** (plans written, pending). Not blocking Heard; worth landing before the next live deploy to reduce blast-radius risk on misconfigured plans.
+- **v1.7.1 ship** — surgical bug fixes: `tests/test-deployment.sh` EXIT-trap (rm -f → rm -rf for `mktemp -d` paths so v1.7.0's served-asset checks actually run), remove the misleading `include_bottom_cta` advisory variable, correct the v1.6.7 PATCH-strip migration note (PATCH preserves `flexAreas` if structure is complete), ship `scripts/upgrade-project-scripts.sh` (R9 — first slice). Plan: `2026-04-27-v1.7.1-bugfixes-and-script-refresh.md`.
+- **v1.8.0 ship** — substantial: extend `survey_fields` schema with `dropdown` / `multiple_checkboxes` / `radio` types + `options` + "Other" overflow; extend `custom_properties` with `enumeration` / `bool` / `number` types; ship `scaffold/src/js/survey-submit.js` for the Forms Submissions API path on the static thank-you survey form; capture form `postSubmitAction` defaults to `redirect_url` with `{{email}}` merge token; auto-add `<slug>_survey_completed` boolean when `include_survey = true`; new `PREFLIGHT_EMAIL_DNS` (typed `dig CNAME`, regional SPF includes, mechanism-order check); schema-alignment test in `tests/test-deployment.sh` (static form names ↔ HubSpot form ↔ `custom_properties` three-way diff). Plan: `2026-04-27-v1.8.0-survey-schema-and-email-dns.md`. Paired skill plan: `2026-04-27-skill-v1.8.0-adoption-survey-and-email.md` in skills repo.
+- **R8 — Preflight HubSpot Domain Connection Check** (plan written, implementation pending). Closes the domain-verification gap and simplifies the skill's hosting-mode handling. Mostly subsumed by v1.7.0's `PREFLIGHT_DOMAIN_CONNECTED` emit; revisit whether R8 still has unique scope.
+- **Plan-review gate + state-backup safeguards** (plans written, pending). Not blocking; worth landing before the next live deploy to reduce blast-radius risk on misconfigured plans.
 - **R5 — Subscription check in preflight** (plan still to be written). Useful before anyone tries a fresh account deploy. Consider bundling with the subscription/office-location ID auto-discovery (scope-change).
 
 ## Deferred / awaiting trigger
 
 - **R10 — Skill Hygiene Rule 6** — conditional on pattern recurrence
-- **R11+ items** — waiting on Heard validation, account tier upgrade, or team adoption signals
+- **R11+ items** — waiting on validation, account tier upgrade, or team adoption signals
 - **R14 — Plugin packaging** — waiting on skill-surface stability
 - **R15 — Enterprise workflow automation** — waiting on Enterprise subscription
+- **R16 — Scaffold conditional templating layer** — needed to bring back functional `include_bottom_cta` etc. as real opt-out variables; deferred while sed-based `build.sh` is sufficient
+- **R17 — DMARC progression coaching in skill** — beyond `p=none`; lights up only after multiple consumers reach steady-state SPF + DKIM
+- **R18 — Embedded-survey-form alternative coaching** (Path A — `hbspt.forms.create` instead of static + Submissions API) — for design-aesthetic edge cases; deferred while v1.8.0's Path B is the design contract
+- **R19 — Tier-classifier verification (Pro / Ent / regional SPF includes)** — needs portal access at non-Starter tiers and a NA1 portal; small admin item that lights up opportunistically
 
 See full entries below.
 
@@ -43,9 +47,13 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | R10 | Skill Hygiene Rule 6 (no preemptive inspection) | TBD (skill-only) | Conditional on pattern recurrence |
 | R11 | CI/CD with GitHub Secrets | TBD (2.x) | Planned |
 | R12 | Account Profile Sync | TBD (2.x) | Planned |
-| R13 | Skill-Driven End-to-End Deployment Test | TBD (2.x) | Depends on R11 |
+| R13 | Skill-Driven End-to-End Deployment Test (covers Playwright DOM tests + form-submission e2e + email-delivery probing via Mailosaur or similar) | TBD (2.x) | Depends on R11 |
 | R14 | Claude Code Plugin Packaging | TBD (2.x) | Depends on skill stabilisation |
 | R15 | Enterprise-Tier Workflow Automation | TBD (3.x) | Tier-gated |
+| R16 | Scaffold Conditional Templating Layer | TBD (1.x or 2.x) | Deferred — sed-based `build.sh` sufficient for now |
+| R17 | DMARC Progression Coaching in Skill | TBD (skill-only) | Conditional on multi-consumer adoption signals |
+| R18 | Embedded-Survey-Form Alternative (Path A) Coaching | TBD (skill-only) | Deferred — Path B is v1.8.0's design contract |
+| R19 | Tier-Classifier Verification (Pro / Ent rows + NA1 / APAC SPF includes) | TBD (1.x) | Pending portal access at relevant tiers/regions |
 | M | Maintainer Tooling (Terraform MCP, CONTRIBUTING.md) | — (non-versioned) | Living recommendation |
 
 ## Shipped (for cross-reference)
@@ -65,6 +73,8 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | v1.6.6 | — | `scripts/upload.sh` switched from `--data-binary` + `Content-Type: application/octet-stream` to `-F "file=@..."` so curl auto-generates the multipart/form-data boundary CMS Source Code v3 expects. Octet-stream uploads were returning 2xx but discarding file bodies ("ghost uploads") so templates never landed in Design Manager. One-line script fix; no Terraform or module changes. |
 | v1.6.7 | — | Welcome-email widget shape fix (since v1.5.0 the body was written as `body.rich_text` with no widget metadata and no `flexAreas` placement, so HubSpot rendered every welcome email empty): switched to `body.html`, added full widget metadata (`module_id 1155639`, `type "module"`, etc.) and verbatim `flexAreas.main.sections[].columns[].widgets` placement on both `data` (POST) and `update_data` (PATCH). Plus `forms.tf` `hidden = true` on `project_source` for both forms (canonical Forms v3 hide flag, replacing reliance on scaffold CSS). Four new API-level checks in `tests/test-deployment.sh` verify the email shape and form-flag fixes. PATCH strips `flexAreas` so consumers upgrading must `terraform taint` + recreate `welcome_email`; on Starter the resulting publish step surfaces an expected, harmless `MISSING_SCOPES` error (v1.7.0 will gate this). |
 | v1.7.0 | — | Substantial scaffold redesign + tier awareness. New `scaffold/src/` ships HubL-correct templates (`{# templateType: page #}`, `{{ get_asset_url }}`, `{{ standard_*_includes }}`), dark-mode CSS (`:root` token system + `@media (prefers-color-scheme: dark)`), eleven-element welcome-email anatomy. New module variables: `email_preview_text` (preview-text widget, default empty), `auto_publish_welcome_email` (publish gate, default true; skill flips to false on Starter to suppress `MISSING_SCOPES`), `include_bottom_cta` (advisory metadata for the scaffolded second form embed). New `scripts/lib/tier-classify.sh` classifies portal tier from `/account-info/v3/details`; preflight gains `PREFLIGHT_TIER` and `PREFLIGHT_DOMAIN_CONNECTED` lines and emits `PREFLIGHT_SCOPES=ok-starter` so skills can recognise tier without re-checking. `set-project-field.sh` allow-list adds the three new keys, removes `HOSTING_MODE_HINT` (skill-only state). Three reference docs (`references/email-anatomy.md`, `references/hubl-cheatsheet.md`, `references/hubspot-api-quirks.md`). Six new served-asset/template-metadata checks in `tests/test-deployment.sh`. Tier classifier ships informed-guess defaults pending real-portal verification; CHANGELOG migration block documents the manual upgrade path for existing projects. |
+| v1.7.1 | R9 (first slice) | Surgical patch from the v1.7.0 deploy round: `tests/test-deployment.sh` EXIT-trap split into a `cleanup_test_artifacts` function (`rm -f` files / `rm -rf` directories) so v1.7.0's served-asset checks actually run; `include_bottom_cta` removal (was misleading-advisory — deleted from `variables.tf`, `tf.sh` exports, `set-project-field.sh` allow-list, scaffold project-profile stub); v1.6.7 CHANGELOG migration block corrected (PATCH preserves `flexAreas` when the body envelope is complete, so `apply` in place is the default path; taint+recreate is fallback only); new `scripts/upgrade-project-scripts.sh` — sanctioned helper for refreshing project-local scripts on framework version bumps with timestamped backups. Non-breaking. |
+| v1.8.0 (pending) | (covers survey-funnel completeness and email-DNS preflight) | Survey schema extensions: `survey_fields[].type ∈ {single_line_text, dropdown, multiple_checkboxes, radio}` with `options` and `other_overflow`; `custom_properties[].type ∈ {string, enumeration, bool, number}`. New scaffold JS: `survey-submit.js` (URL-param email + Forms Submissions API + "Other" overflow reveal/collect). Capture form `postSubmitAction` defaults to `redirect_url` with `{{email}}` merge token (overrideable via new `capture_post_submit_action_override`). Auto-added `<slug>_survey_completed` boolean when `include_survey = true`. New `PREFLIGHT_EMAIL_DNS` preflight emit (typed `dig CNAME`, region-aware SPF include, mechanism-order check, DKIM CNAME presence, DMARC warn-only). Schema-alignment test in `tests/test-deployment.sh` (static form names ↔ HubSpot form names ↔ `custom_properties` names three-way diff — closes the "static form looks fine but submits nowhere because field names drifted" silent-failure mode). New reference docs: `references/forms-submissions-api.md`, `references/email-auth-dns.md` (with regional SPF table). Tier-classifier Starter row marked verified. Plan: `2026-04-27-v1.8.0-survey-schema-and-email-dns.md`. |
 
 ---
 
@@ -535,6 +545,75 @@ Manual verification per project catches project-specific issues but not framewor
 **Why tier-gated:** requires Marketing Hub Enterprise subscription. Workflow API is locked behind that tier. This feature is of zero value to any user below Enterprise. Its addition doesn't benefit the baseline framework. Keep it as an explicit enterprise extension so the feature exists for those who need it without cluttering the default path.
 
 **Alternative (explored and rejected):** Zapier or Make.com as workflow engines — would work on any tier but introduces third-party dependencies, additional auth, and runtime cost per trigger. Enterprise workflows are the clean answer for teams already paying for Enterprise.
+
+---
+
+## R16: Scaffold Conditional Templating Layer
+
+**Current state:** `scripts/build.sh` is a sed-based token substitutor (`__DOMAIN__` → value etc.). It cannot conditionally include or omit sections of a template. v1.7.0 introduced the `include_bottom_cta` module variable as "advisory metadata only" because honouring it would require conditional rendering. v1.7.1 removes the variable rather than ship a half-wired one.
+
+**Goal:** Allow the scaffold to ship sections gated by project-config booleans, so consumers can opt out of the bottom CTA, the share row in the welcome email, etc., via Terraform module inputs without hand-editing scaffold files.
+
+**Approach options:**
+
+1. **Lightweight `{% if VAR %}...{% endif %}` markers in scaffold files; `build.sh` strips/keeps based on env var.** Adds ~30 lines to `build.sh`; no new dependency. Sufficient for boolean gates. Doesn't generalise to value substitution that's already covered by token substitution.
+2. **Real templating engine** (e.g. `mo` for mustache, or `gomplate`). More expressive but introduces a new dependency contributors must install; failure modes proliferate (template syntax errors at build time on niche systems).
+3. **Skill-side template rendering before build.** Skill produces the post-conditional source; framework's build is unchanged. Trade-off: scaffold templates become less self-explanatory because conditionals never execute against the scaffold itself.
+
+**Recommendation:** option 1 (lightweight in-build conditionals) when this lights up. Bring back `include_bottom_cta` as the first real consumer; future variables (`include_share_row` etc.) follow the same pattern.
+
+**Why deferred:** the only known consumer-need today is `include_bottom_cta`, and the workaround (delete the second form embed manually) is one-line. Worth a real templating layer when a second or third boolean gate is requested in the same plan window.
+
+---
+
+## R17: DMARC Progression Coaching in Skill
+
+**Current state:** v1.8.0's skill plan coaches DMARC presence (`p=none`) only. Mature email reputation requires progressing to `p=quarantine` then `p=reject`, with `rua` aggregate reporting in place to monitor receiver feedback during the transition.
+
+**Goal:** Skill detects current DMARC posture and coaches the next step:
+
+| Current | Skill suggests |
+|---|---|
+| Missing | `v=DMARC1; p=none; rua=mailto:dmarc@<domain>` |
+| `p=none` for ≥ 2 weeks with rua reports clean | Move to `p=quarantine; pct=10` to start sampling |
+| `p=quarantine; pct=10` clean for 2 weeks | Bump to `pct=50`, then `pct=100` |
+| `p=quarantine` at full enforcement | Move to `p=reject` |
+
+**Why skill-only:** DMARC progression is judgement, not automation. The skill's role is informed coaching with concrete next strings; the consumer adds the DNS record.
+
+**Why deferred:** lights up only after multiple consumers reach the steady-state SPF + DKIM clean state. With a single Starter consumer in deployment, the `p=none` baseline is sufficient. Promote to a plan once two or three consumers are live and asking for the next step.
+
+---
+
+## R18: Embedded-Survey-Form Alternative (Path A) Coaching
+
+**Current state:** v1.8.0 ships Path B (static markup + Forms Submissions API) as the survey-form contract. The HubSpot-defined `restapi_object.survey_form` is documented as "API submission target only, never embedded." This preserves design control over the rendered thank-you page.
+
+**Goal:** Skill optionally offers Path A — embed the HubSpot-defined survey form via `hbspt.forms.create` instead of static markup — when a consumer prioritises HubSpot-managed validation / consent UI / accessibility over design control. The skill walks through the CSS-override considerations (HubSpot's form classes don't match the project's design tokens; recovery via `cssClass` parameter and selector-scoped overrides).
+
+**Why deferred:** the design-control trade-off has been explicitly chosen. Path B's "static + Submissions API" is the contract; Path A coaching only matters if a consumer's brief makes design control secondary to HubSpot-managed validation. Promote when that brief arrives.
+
+---
+
+## R19: Tier-Classifier Verification (Pro / Ent rows + NA1 / APAC SPF includes)
+
+**Current state:** v1.7.0 shipped `scripts/lib/tier-classify.sh` with informed-guess `accountType` mappings for Pro and Ent tiers (Starter row was verified empirically against a real Starter portal during the v1.7.0 deploy round). v1.8.0's `references/email-auth-dns.md` includes the EU1 SPF hostname pattern; NA1 is a placeholder, and APAC is unspecified.
+
+**Goal:** Verify the placeholder rows by probing real portals at each tier and region. Update the classifier and the email-auth reference doc with verified values.
+
+**Approach (small, opportunistic):**
+
+| Row | Probe |
+|---|---|
+| Pro `accountType` value | `bash $FRAMEWORK_HOME/scripts/hs-curl.sh GET '/account-info/v3/details'` against any Pro portal — capture `accountType` |
+| Ent `accountType` value | Same against any Ent portal |
+| NA1 SPF include hostname | Walk through HubSpot UI's "Connect a sending domain" flow on a NA1 portal — capture the `<portal-id>.spfXX.hubspotemail.net` hostname HubSpot displays in DNS instructions. Verify the SPF mechanism-order check correctly accepts the verified value. |
+| APAC SPF include (when introduced) | Same flow on an APAC portal |
+| Ent + Transactional Email scope availability | Verify whether `transactional-email` is grantable on Ent without the add-on, or strictly add-on-gated |
+
+**Why deferred:** doesn't block any current consumer. Reduces a class of "informed-guess" annotations to "verified" at near-zero implementation cost — a 30-minute task once portal access exists. Promote to a plan when a Pro / Ent / NA1 deploy is on the calendar (tomorrow or next year, no way to know in advance).
+
+**Sub-item already covered:** The Starter row was verified during the v1.7.0 deploy round; v1.8.0's plan includes the explicit annotation update.
 
 ---
 
