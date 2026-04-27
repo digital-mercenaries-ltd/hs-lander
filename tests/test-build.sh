@@ -71,4 +71,26 @@ cp -r "$REPO_DIR/tests/fixtures/src" "$TMPDIR/src"
 assert_file_contains "$TMPDIR/dist/templates/landing-page.html" "js.hsforms.net" "NA1 hsforms host (no region prefix)"
 assert_file_not_contains "$TMPDIR/dist/templates/landing-page.html" "js-eu1" "no EU1 prefix for NA1"
 
+# --- Sed metacharacter round-trip via build.sh's actual call site ---
+# Closes test-analyzer #3 carryover: previously test-sed-portable.sh
+# proved sed_escape_replacement works in isolation, but no test exercised
+# it through build.sh's `sed_inplace` invocation. A regression that
+# bypasses sed_escape_replacement in build.sh (e.g. someone re-inlines a
+# `sed` call) would now be caught here.
+echo ""
+echo "--- Sed metachar values round-trip through build.sh ---"
+# DOMAIN is one of the build-token values. set-project-field.sh's banned-
+# char check accepts | and &, so a real consumer could legitimately ship
+# such a value into project.config.sh and reach build.sh.
+sed 's#^DOMAIN=.*#DOMAIN="foo|bar"#' "$TMPDIR/project.config.sh" > "$TMPDIR/project.config.metachar.sh"
+mv "$TMPDIR/project.config.metachar.sh" "$TMPDIR/project.config.sh"
+# Restore region for clean rebuild.
+sed "s|^HUBSPOT_REGION=.*|HUBSPOT_REGION=\"eu1\"|" "$TMPDIR/project.config.sh" > "$TMPDIR/project.config.metachar2.sh"
+mv "$TMPDIR/project.config.metachar2.sh" "$TMPDIR/project.config.sh"
+rm -rf "$TMPDIR/dist"
+cp -r "$REPO_DIR/tests/fixtures/src" "$TMPDIR/src"
+(cd "$TMPDIR" && bash scripts/build.sh)
+assert_file_contains "$TMPDIR/dist/templates/landing-page.html" "foo|bar" "literal | in DOMAIN survives sed substitution"
+assert_file_contains "$TMPDIR/dist/templates/thank-you.html" "foo|bar" "literal | also reaches thank-you page"
+
 test_summary

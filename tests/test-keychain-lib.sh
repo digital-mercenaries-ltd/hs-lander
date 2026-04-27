@@ -55,13 +55,106 @@ token=$(keychain_read "test-service") || rc=$?
 assert_equal "$rc" "0" "rc 0 on successful read"
 assert_equal "$token" "$MOCK_TOKEN" "token returned matches mock"
 
-# --- Failure path ---
+# --- Missing-entry failure path (rc 1) ---
 echo ""
-echo "--- Failure path ---"
+echo "--- Missing-entry path (rc 1) ---"
 rc=0
 token=$(keychain_read "wrong-service" 2>/dev/null) || rc=$?
-assert_equal "$rc" "1" "rc 1 when security fails"
-assert_equal "$token" "" "no token printed on failure"
+assert_equal "$rc" "1" "rc 1 when security fails (entry missing)"
+assert_equal "$token" "" "no token printed on missing"
+
+# --- Empty-entry failure path (rc 3) ---
+# The pre-v1.9.0 inline pattern `HUBSPOT_TOKEN=$(security ...) || exit 1`
+# silently accepted an empty token because security exited 0. The lib now
+# distinguishes this case so callers can coach the operator to repopulate
+# rather than re-add the entry.
+echo ""
+echo "--- Empty-entry path (rc 3) ---"
+# Switch the mock to emit empty stdout for a known service name.
+cat > "$TMPDIR/mock-bin/security" <<'MOCK'
+#!/usr/bin/env bash
+service=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s) service="$2"; shift 2 ;;
+    *)  shift ;;
+  esac
+done
+case "$service" in
+  test-service)        echo "abc-123-mock-token-XYZ"; exit 0 ;;
+  empty-entry-service) echo ""; exit 0 ;;
+  *)                   exit 1 ;;
+esac
+MOCK
+chmod +x "$TMPDIR/mock-bin/security"
+
+rc=0
+token=$(keychain_read "empty-entry-service" 2>/dev/null) || rc=$?
+assert_equal "$rc" "3" "rc 3 when entry exists but is empty"
+assert_equal "$token" "" "no token printed when entry empty"
+
+err=$(keychain_read "empty-entry-service" 2>&1 >/dev/null || true)
+if [[ "$err" == *"exists but is empty"* ]]; then
+  PASSES=$((PASSES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  PASS: empty-entry error message distinguishes from missing-entry"
+else
+  FAILURES=$((FAILURES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  FAIL: empty-entry error message missing or unexpected: '$err'"
+fi
+if [[ "$err" == *"delete-generic-password"* ]]; then
+  PASSES=$((PASSES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  PASS: empty-entry remediation hints at delete+add (not just add)"
+else
+  FAILURES=$((FAILURES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  FAIL: empty-entry remediation missing delete-then-add hint"
+fi
+
+# --- Defensive arg-count handling ---
+echo ""
+echo "--- Defensive arg-count handling ---"
+# Zero args → rc 2 (matches is_valid_name's convention; distinct from rc 1
+# missing and rc 3 empty so a `set -u` caller gets a structured error
+# instead of "$1: unbound variable").
+rc=0
+keychain_read 2>/dev/null || rc=$?
+assert_equal "$rc" "2" "zero args returns rc 2"
+
+rc=0
+keychain_read "service-a" "service-b" 2>/dev/null || rc=$?
+assert_equal "$rc" "2" "two args returns rc 2 (multi-arg call rejected)"
+
+err=$(keychain_read 2>&1 >/dev/null || true)
+if [[ "$err" == *"expected 1 arg"* ]]; then
+  PASSES=$((PASSES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  PASS: arg-count error message includes 'expected 1 arg'"
+else
+  FAILURES=$((FAILURES + 1))
+  TESTS=$((TESTS + 1))
+  echo "  FAIL: arg-count error message missing or unexpected: '$err'"
+fi
+
+# Restore the original two-state mock for the remaining tests.
+cat > "$TMPDIR/mock-bin/security" <<MOCK
+#!/usr/bin/env bash
+service=""
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    -s) service="\$2"; shift 2 ;;
+    *)  shift ;;
+  esac
+done
+if [[ "\$service" == "test-service" ]]; then
+  echo "$MOCK_TOKEN"
+  exit 0
+fi
+exit 1
+MOCK
+chmod +x "$TMPDIR/mock-bin/security"
 
 # Error message structure
 err=$(keychain_read "wrong-service" 2>&1 >/dev/null || true)

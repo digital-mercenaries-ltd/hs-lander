@@ -36,8 +36,8 @@ pointer="$project_dir/project.config.sh"
 
 # Parse a single VAR=value from a shell-syntax file without sourcing it.
 # Matches: VAR="value" | VAR='value' | VAR=value | export-prefixed forms.
-# v1.9.0 (Component 2.3): implementation moved to scripts/lib/source-vars.sh
-# so preflight.sh can share the same extractor.
+# Implementation in scripts/lib/source-vars.sh; the local `_extract_var`
+# alias is a readability bridge for the call sites below.
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/source-vars.sh"
 _extract_var() { extract_var_via_parse "$@"; }

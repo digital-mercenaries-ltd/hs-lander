@@ -40,9 +40,8 @@ office_location_id="${7:-}"
 # Validate account name: lowercase letters, digits, hyphens only. Rejects
 # empty, slashes (path traversal), dots, spaces, uppercase — keeps the
 # ~/.config/hs-lander/<account>/ convention clean and defeats `..` tricks.
-# Uses the shared lib helper introduced in v1.8.1 (Component 2.5 of v1.9.0
-# switched the inline regex to the lib for consistency across all six
-# config-touching scripts).
+# Uses the shared lib helper for consistency with the other config-touching
+# scripts.
 if ! is_valid_name "$account"; then
   echo "ACCOUNTS_INIT=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
   exit 1

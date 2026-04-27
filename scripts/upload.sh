@@ -32,7 +32,7 @@ if [[ ! -d "$DIST_DIR" ]]; then
 fi
 
 # Read token from Keychain using the service name from the account config.
-# v1.9.0 (Component 2.4): xtrace-safe lib helper.
+# Lib helper guards against `bash -x` token leak via the security command.
 : "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
 HUBSPOT_TOKEN=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE") || exit 1
 

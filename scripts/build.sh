@@ -5,15 +5,20 @@ set -euo pipefail
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
-# v1.9.0 (Component 2): inherit_errexit so a sed crash inside `$( ... )`
-# command substitution propagates instead of silently producing an empty
-# value. Defensive against the silent-failure-hunter M1 finding from the
-# v1.8.1 review. Requires bash 4.4+; macOS ships 3.2 by default but ALL
-# real consumers run via npm scripts that resolve to /usr/bin/env bash on
-# their PATH, which on a Homebrew-managed dev box is 5.x. The guard means
-# the script still parses on 3.2 and falls back to the (less defensive)
-# default errexit semantics there.
-shopt -s inherit_errexit 2>/dev/null || true
+# inherit_errexit propagates errexit into command substitutions, so a sed
+# crash inside `$( ... )` aborts the script instead of silently producing
+# an empty value. Requires bash 4.4+. On bash 3.2 (default macOS shell)
+# the option is unknown — we soft-fail with a stderr warning so an
+# operator running the script directly with /bin/bash knows the
+# defensive layer isn't in effect, rather than silently believing it is.
+# Most real consumers run via npm scripts that resolve to a Homebrew-
+# managed bash 5.x; this guard only affects fallback paths.
+if ! shopt -s inherit_errexit 2>/dev/null; then
+  echo "WARNING: bash $BASH_VERSION lacks 'inherit_errexit' (need 4.4+)." >&2
+  echo "         Defensive errexit-in-command-subst layer is OFF." >&2
+  echo "         Consider running via 'npm run build' (Homebrew bash on PATH)" >&2
+  echo "         or installing a newer bash." >&2
+fi
 
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"

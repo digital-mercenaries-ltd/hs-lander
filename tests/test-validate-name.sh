@@ -83,12 +83,18 @@ else
   echo "  FAIL: arg-count error message missing or unexpected: '$err'"
 fi
 
-# --- ${1:-} guard (silent-failure-hunter H3 carryover) ---
+# --- Empty-string handling under set -u ---
 echo ""
-echo "--- set -u resilience ---"
-# Caller under set -u passing an unset var: must not crash with
-# "$1: unbound variable" before validation runs. The function returns
-# (regex fails on empty string) rather than aborting.
+echo "--- empty-string handling under set -u ---"
+# A caller under set -u who defaults their unset var via "${var:-}" gets
+# a literal empty string. The function then runs the regex against ""
+# (which fails — `^[a-z0-9]...` doesn't match empty) and returns 1. The
+# point of the function-internal `${1:-}` expansion is symmetry: if a
+# future caller forgets the `:-` and passes "$truly_unset", bash
+# expansion at the call site already errors before is_valid_name runs,
+# so the function's `${1:-}` provides defence only for callers who
+# resolve the var inside the function (uncommon but cheap to support).
+# This test asserts the empty-string-doesn't-crash invariant.
 rc=0
 (
   set -u
@@ -96,6 +102,6 @@ rc=0
   unset unset_var
   is_valid_name "${unset_var:-}"
 ) || rc=$?
-assert_equal "$rc" "1" "set -u + unset var via :- → regex fails (return 1, not crash)"
+assert_equal "$rc" "1" "empty string under set -u: regex returns 1 (not a crash)"
 
 test_summary

@@ -109,5 +109,8 @@ jobs:
       - name: Run test-sed-portable.sh
         run: bash tests/test-sed-portable.sh
 
+      - name: Run test-source-vars.sh
+        run: bash tests/test-source-vars.sh
+
       - name: Run test-keychain-lib.sh
         run: bash tests/test-keychain-lib.sh

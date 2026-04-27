@@ -19,11 +19,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
 source "$PROJECT_DIR/project.config.sh"
 
 # Read token from Keychain using the service name from the account config.
-# v1.9.0 (Component 2.4): xtrace-safe lib helper replaces the inline
-# `security find-generic-password` block. Caller responsibility for the
-# subsequent `export TF_VAR_hubspot_token` expansion is unchanged — any
-# operator running `bash -x scripts/tf.sh` should still wrap their session,
-# but the lib closes the leak for the security call itself.
+# Lib helper closes the leak for the security call itself; the caller is
+# still responsible for wrapping subsequent token-using expansions
+# (`export TF_VAR_hubspot_token=...`) under `bash -x` if they care about
+# xtrace hygiene end-to-end. See scripts/lib/keychain.sh for the contract.
 : "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
 HUBSPOT_TOKEN=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE") || exit 1
 
