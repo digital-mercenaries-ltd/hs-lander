@@ -102,4 +102,18 @@ assert_equal "$exit5" "0" "exit 0 on pre-v1.5.0 profile"
 assert_file_contains "$TMP5/log" "^ACCOUNT_SUBSCRIPTION_ID=$" "empty subscription id line emitted"
 assert_file_contains "$TMP5/log" "^ACCOUNT_OFFICE_LOCATION_ID=$" "empty office location id line emitted"
 
+# --- Scenario 6: invalid account name rejected (v1.9.0 validate-name lib) ---
+echo ""
+echo "--- Scenario 6: invalid-name rejected ---"
+TMP6=$(mktemp -d)
+mkdir -p "$TMP6/dml"
+exit6=$(run "$TMP6" '..' "$TMP6/log" || true)
+assert_equal "$exit6" "1" "exit 1 on '..' account name"
+assert_file_contains "$TMP6/log" "ACCOUNT_STATUS=error invalid-account-name" "invalid-account-name error"
+
+exit7=$(run "$TMP6" 'DML' "$TMP6/log7" || true)
+assert_equal "$exit7" "1" "exit 1 on uppercase account name"
+assert_file_contains "$TMP6/log7" "ACCOUNT_STATUS=error invalid-account-name" "invalid-account-name error for uppercase"
+rm -rf "$TMP6"
+
 test_summary

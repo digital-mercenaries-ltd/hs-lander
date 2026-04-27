@@ -65,6 +65,12 @@ trap 'unset token; rm -f "$scopes_body_file" "$account_info_body_file" "$domains
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/tier-classify.sh"
 
+# Keychain reader with xtrace suppression baked in. Used by the
+# CREDENTIAL block below; see scripts/lib/keychain.sh for the contract
+# (three-state outcome, xtrace dance, defensive arg handling).
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
+
 # --- TOOLS_REQUIRED ---
 # Runs first so tool availability is reported even when config is unset.
 # `command -v` is safe under xtrace — no secrets expanded here.
@@ -114,45 +120,23 @@ _emit_tools_optional() {
 # depends on them. If POINTER is missing, skip all downstream (no way to find
 # the hierarchy files without it).
 
-# Helper: source a file in a subshell (with source builtin shadowed so cascading
-# sources don't fire) and print requested var assignments. Caller eval's the
-# output into the current shell.
-_extract_pointer_var() {
-  # Extract the value of a single variable assignment from a shell-syntax
-  # file WITHOUT sourcing it (sourcing the pointer would fire its cascading
-  # `source` calls, which may reference account/project config files that
-  # don't exist yet).
-  #
-  # Supported forms:
-  #   VAR="value"
-  #   VAR='value'
-  #   VAR=value              (unquoted, up to whitespace or #)
-  #   export VAR="value"     (optional leading `export`)
-  #   VAR="value"  # comment (trailing comments ignored)
-  #
-  # Not supported: values that depend on expansion (e.g. VAR="$OTHER"). Those
-  # come back as the literal string — preflight will treat the resulting path
-  # as nonexistent and surface ACCOUNT_PROFILE/PROJECT_PROFILE as missing,
-  # which is a clearer signal to the user than silently proceeding.
-  local path="$1" var="$2"
-  awk -v V="$var" '
-    match($0, "^[[:space:]]*(export[[:space:]]+)?"V"=") {
-      rest = substr($0, RSTART + RLENGTH)
-      if (rest ~ /^"/) {
-        if (match(rest, /^"[^"]*"/)) { print substr(rest, 2, RLENGTH - 2); exit }
-      } else if (rest ~ /^\x27/) {
-        if (match(rest, /^\x27[^\x27]*\x27/)) { print substr(rest, 2, RLENGTH - 2); exit }
-      } else {
-        if (match(rest, /^[^[:space:]#]+/)) { print substr(rest, 1, RLENGTH); exit }
-      }
-    }
-  ' "$path"
-}
-
+# Helper: extract HS_LANDER_ACCOUNT / HS_LANDER_PROJECT from the project
+# pointer WITHOUT sourcing it (sourcing the pointer would fire its cascading
+# `source` calls, which may reference account/project config files that
+# don't exist yet). Uses the lib's `extract_var_via_parse` helper — the
+# previous inline awk block was a duplicate of the same lib helper.
+#
+# Form coverage from extract_var_via_parse: double-quoted, single-quoted,
+# unquoted (up to whitespace or #), optional `export` prefix, trailing
+# `# comment` stripped from unquoted values. Values depending on shell
+# expansion (e.g. VAR="$OTHER") come back as the literal string —
+# preflight then treats the resulting path as nonexistent and surfaces
+# ACCOUNT_PROFILE/PROJECT_PROFILE as missing rather than silently
+# proceeding.
 _extract_pointer_vars() {
   local path="$1" v
   for v in HS_LANDER_ACCOUNT HS_LANDER_PROJECT; do
-    printf '%s=%q\n' "$v" "$(_extract_pointer_var "$path" "$v")"
+    printf '%s=%q\n' "$v" "$(extract_var_via_parse "$path" "$v")"
   done
 }
 
@@ -175,18 +159,14 @@ _extract_pointer_vars() {
 #
 # Scaffold-shipped configs don't use set -u, so this is a theoretical
 # concern for hand-edited configs.
-_source_vars() {
-  local path="$1"; shift
-  (
-    set +eu
-    # shellcheck source=/dev/null
-    source "$path" 2>/dev/null || true
-    set +u
-    for v in "$@"; do
-      printf '%s=%q\n' "$v" "${!v:-}"
-    done
-  )
-}
+#
+# The implementation lives in scripts/lib/source-vars.sh so other config-
+# touching scripts can share the same extractor. The local `_source_vars`
+# alias preserves the call sites below as a readability bridge — see
+# source_vars in the lib for the real implementation.
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/source-vars.sh"
+_source_vars() { source_vars "$@"; }
 
 # --- PROJECT_POINTER ---
 if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
@@ -315,48 +295,61 @@ else
   scopes_body_file=""
   domains_status="000"
   domains_curl_exit=0
-  if token=$(security find-generic-password \
-               -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
-               -a "$USER" -w 2>/dev/null); then
-    if [[ -n "$token" ]]; then
-      credential_state="found"
-      # Capture curl's exit code separately (via `|| curl_exit=$?`) so a
-      # non-zero exit doesn't trip set -e — we need to distinguish
-      # "curl couldn't connect" (unreachable) from "HTTP error response".
-      # Capture body so the tier-classifier can read accountType / subscriptions
-      # without a second round-trip.
-      account_info_body_file=$(mktemp)
-      api_status=$(curl -s -o "$account_info_body_file" -w "%{http_code}" \
-        -H "Authorization: Bearer $token" \
-        "https://api.hubapi.com/account-info/v3/details") || api_curl_exit=$?
-      # Skip subsequent calls if the first failed to reach the server.
-      if [[ $api_curl_exit -eq 0 ]]; then
-        ps_status=$(curl -s -o /dev/null -w "%{http_code}" \
-          -H "Authorization: Bearer $token" \
-          "https://api.hubapi.com/crm/v3/properties/contacts/project_source") || ps_curl_exit=$?
-        # Scope introspection — only run when API access looks healthy.
-        if [[ "$api_status" == "200" ]]; then
-          scopes_body_file=$(mktemp)
-          scopes_status=$(curl -s -o "$scopes_body_file" -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $token" \
-            -H "Content-Type: application/json" \
-            -d "{\"tokenKey\":\"$token\"}" \
-            "https://api.hubapi.com/oauth/v2/private-apps/get/access-token-info") || scopes_curl_exit=$?
+  # Use the lib helper for the security call. Xtrace is already suppressed
+  # for the surrounding block (we need it suppressed for the subsequent
+  # curl calls too, where `Authorization: Bearer $token` would leak under
+  # `bash -x`); keychain_read no-ops its own xtrace dance because we're
+  # already off, and we keep the wider suppression for the API probes
+  # below.
+  #
+  # keychain_read's three-state contract (rc 0 / 1 / 3 — see lib/keychain.sh)
+  # maps directly to credential_state's three-state output. Capture rc
+  # explicitly because both the empty-entry case (rc 3) and the missing-entry
+  # case (rc 1) are non-zero; an `if token=$(...)` shape would collapse them.
+  keychain_rc=0
+  token=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" 2>/dev/null) || keychain_rc=$?
+  case "$keychain_rc" in
+    0) credential_state="found" ;;
+    3) credential_state="empty" ;;
+    *) credential_state="missing" ;;
+  esac
+  unset keychain_rc
 
-          # Domain-connection probe — surfaces the "DOMAIN not connected to
-          # HubSpot" failure mode before terraform apply rather than after a
-          # confusing temp-slug deploy. Only meaningful for projects in
-          # custom-domain hosting modes; system-domain and iframe consumers
-          # still get a result but the skill ignores it (it knows the mode).
-          domains_body_file=$(mktemp)
-          domains_status=$(curl -s -o "$domains_body_file" -w "%{http_code}" \
-            -H "Authorization: Bearer $token" \
-            "https://api.hubapi.com/cms/v3/domains") || domains_curl_exit=$?
-        fi
+  if [[ "$credential_state" == "found" ]]; then
+    # Capture curl's exit code separately (via `|| curl_exit=$?`) so a
+    # non-zero exit doesn't trip set -e — we need to distinguish
+    # "curl couldn't connect" (unreachable) from "HTTP error response".
+    # Capture body so the tier-classifier can read accountType / subscriptions
+    # without a second round-trip.
+    account_info_body_file=$(mktemp)
+    api_status=$(curl -s -o "$account_info_body_file" -w "%{http_code}" \
+      -H "Authorization: Bearer $token" \
+      "https://api.hubapi.com/account-info/v3/details") || api_curl_exit=$?
+    # Skip subsequent calls if the first failed to reach the server.
+    if [[ $api_curl_exit -eq 0 ]]; then
+      ps_status=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: Bearer $token" \
+        "https://api.hubapi.com/crm/v3/properties/contacts/project_source") || ps_curl_exit=$?
+      # Scope introspection — only run when API access looks healthy.
+      if [[ "$api_status" == "200" ]]; then
+        scopes_body_file=$(mktemp)
+        scopes_status=$(curl -s -o "$scopes_body_file" -w "%{http_code}" \
+          -X POST \
+          -H "Authorization: Bearer $token" \
+          -H "Content-Type: application/json" \
+          -d "{\"tokenKey\":\"$token\"}" \
+          "https://api.hubapi.com/oauth/v2/private-apps/get/access-token-info") || scopes_curl_exit=$?
+
+        # Domain-connection probe — surfaces the "DOMAIN not connected to
+        # HubSpot" failure mode before terraform apply rather than after a
+        # confusing temp-slug deploy. Only meaningful for projects in
+        # custom-domain hosting modes; system-domain and iframe consumers
+        # still get a result but the skill ignores it (it knows the mode).
+        domains_body_file=$(mktemp)
+        domains_status=$(curl -s -o "$domains_body_file" -w "%{http_code}" \
+          -H "Authorization: Bearer $token" \
+          "https://api.hubapi.com/cms/v3/domains") || domains_curl_exit=$?
       fi
-    else
-      credential_state="empty"
     fi
   fi
 

@@ -13,17 +13,18 @@ PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 export HS_LANDER_PROJECT_DIR="$PROJECT_DIR"
 
 # shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
+
+# shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
 
 # Read token from Keychain using the service name from the account config.
+# Lib helper closes the leak for the security call itself; the caller is
+# still responsible for wrapping subsequent token-using expansions
+# (`export TF_VAR_hubspot_token=...`) under `bash -x` if they care about
+# xtrace hygiene end-to-end. See scripts/lib/keychain.sh for the contract.
 : "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
-HUBSPOT_TOKEN=$(security find-generic-password \
-  -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
-  -a "$USER" -w 2>/dev/null) || {
-  echo "ERROR: Could not read Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE'." >&2
-  echo "Add it with: security add-generic-password -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'" >&2
-  exit 1
-}
+HUBSPOT_TOKEN=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE") || exit 1
 
 # Export Terraform variables. Values sourced from the account config
 # (via project.config.sh) and the project profile (same source chain).

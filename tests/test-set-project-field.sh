@@ -280,4 +280,30 @@ exit15=$(run "$TMP15" "$TMP15/log" dml heard INCLUDE_BOTTOM_CTA="false" || true)
 assert_equal "$exit15" "1" "[Scenario 15] exit 1 when INCLUDE_BOTTOM_CTA is set"
 assert_file_contains "$TMP15/log" "^SET_FIELD=error unknown-key INCLUDE_BOTTOM_CTA$" "[Scenario 15] unknown-key error emitted"
 
+# --- Scenario 16: invalid account name rejected (v1.9.0 validate-name lib) ---
+TMP16=$(mktemp -d)
+mkdir -p "$TMP16/.hs-lander/dml"
+cat > "$TMP16/.hs-lander/dml/foo.sh" <<'PROFILE'
+PROJECT_SLUG="foo"
+DOMAIN=""
+PROFILE
+echo ""
+echo "--- Scenario 16: invalid-name validation (v1.9.0) ---"
+exit16=0
+HS_LANDER_CONFIG_DIR="$TMP16/.hs-lander" bash "$SCRIPT" '..' foo DOMAIN=evil.com >"$TMP16/log" 2>&1 || exit16=$?
+assert_equal "$exit16" "1" "exit 1 on '..' account name (path-traversal defeated)"
+assert_file_contains "$TMP16/log" "SET_FIELD=error invalid-account-name" "invalid-account-name error emitted"
+
+exit17=0
+HS_LANDER_CONFIG_DIR="$TMP16/.hs-lander" bash "$SCRIPT" dml 'Foo' DOMAIN=evil.com >"$TMP16/log17" 2>&1 || exit17=$?
+assert_equal "$exit17" "1" "exit 1 on 'Foo' project name (uppercase rejected)"
+assert_file_contains "$TMP16/log17" "SET_FIELD=error invalid-project-name" "invalid-project-name error emitted"
+
+# Profile content unchanged on validation rejection
+foo_unchanged=$(cat "$TMP16/.hs-lander/dml/foo.sh")
+expected_foo=$'PROJECT_SLUG="foo"\nDOMAIN=""'
+assert_equal "$foo_unchanged" "$expected_foo" "profile not modified by rejected invocation"
+
+rm -rf "$TMP16"
+
 test_summary

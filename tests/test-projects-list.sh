@@ -60,4 +60,17 @@ exit4=$(run "$TMP4" dml "$TMP4/log" || true)
 assert_equal "$exit4" "0" "exit 0 with multiple projects"
 assert_equal "$(cat "$TMP4/log")" "PROJECTS=heard,tsc" "projects reported as csv (shell glob order)"
 
+# --- Scenario 5: invalid account name rejected (v1.9.0 validate-name lib) ---
+echo ""
+echo "--- Scenario 5: invalid-name rejected ---"
+TMP5=$(mktemp -d)
+exit5=$(run "$TMP5" '..' "$TMP5/log" || true)
+assert_equal "$exit5" "1" "exit 1 on '..' account name (path-traversal defeated)"
+assert_file_contains "$TMP5/log" "ACCOUNT_STATUS=error invalid-account-name" "invalid-account-name error"
+
+exit6=$(run "$TMP5" 'a/b' "$TMP5/log6" || true)
+assert_equal "$exit6" "1" "exit 1 on 'a/b' account name (slash rejected)"
+assert_file_contains "$TMP5/log6" "ACCOUNT_STATUS=error invalid-account-name" "invalid-account-name error for slash"
+rm -rf "$TMP5"
+
 test_summary

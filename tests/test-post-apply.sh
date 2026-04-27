@@ -20,11 +20,13 @@ trap 'rm -rf "$TMPDIR"' EXIT
 #   $TMPDIR/home/.config/hs-lander/<account>/config.sh   — account-level settings
 #   $TMPDIR/home/.config/hs-lander/<account>/<project>.sh — project-level settings (write target)
 mkdir -p \
-  "$TMPDIR/project/scripts" \
+  "$TMPDIR/project/scripts/lib" \
   "$TMPDIR/project/terraform" \
   "$TMPDIR/home/.config/hs-lander/testacct"
 
 cp "$REPO_DIR/scripts/post-apply.sh" "$TMPDIR/project/scripts/post-apply.sh"
+# post-apply sources lib/sed-portable.sh
+cp "$REPO_DIR/scripts/lib/sed-portable.sh" "$TMPDIR/project/scripts/lib/sed-portable.sh"
 
 # Account config (unchanged by post-apply)
 cat > "$TMPDIR/home/.config/hs-lander/testacct/config.sh" <<'EOF'
