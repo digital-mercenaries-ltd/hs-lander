@@ -31,6 +31,7 @@ PREFLIGHT_CONTRACT_KEYS=(
   PREFLIGHT_DNS
   PREFLIGHT_DOMAIN_CONNECTED
   PREFLIGHT_EMAIL_DNS
+  PREFLIGHT_EMAIL_REPLY_TO
   PREFLIGHT_GA4
   PREFLIGHT_FORM_IDS
   PREFLIGHT_TOOLS_OPTIONAL
@@ -107,6 +108,7 @@ write_project_config() {
   local capture="${CFG_CAPTURE_FORM_ID-form-abc123}"
   local survey="${CFG_SURVEY_FORM_ID-}"
   local list="${CFG_LIST_ID-list-def456}"
+  local email_reply_to="${CFG_EMAIL_REPLY_TO-}"
   cat > "$dir/home/.config/hs-lander/testacct/testproj.sh" <<EOF
 PROJECT_SLUG="$slug"
 DOMAIN="$domain"
@@ -115,6 +117,7 @@ GA4_MEASUREMENT_ID="$ga4"
 CAPTURE_FORM_ID="$capture"
 SURVEY_FORM_ID="$survey"
 LIST_ID="$list"
+EMAIL_REPLY_TO="$email_reply_to"
 EOF
 }
 
@@ -758,7 +761,7 @@ assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools
 assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
 assert_full_contract "$LOGO" "Scenario O"
 preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
-assert_equal "$preflight_line_count" "16" "exactly 16 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 15)"
+assert_equal "$preflight_line_count" "17" "exactly 17 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 16)"
 
 # --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
 # Two tools missing: csv list in the detail.
@@ -823,7 +826,7 @@ write_project_sourcing_chain "$TMPR"
 write_mock_bin "$TMPR"
 LOGR="$TMPR/preflight.log"
 run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
-expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_EMAIL_REPLY_TO\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 
@@ -917,7 +920,43 @@ assert_equal "$exitV" "0" "exit 0 when VERSION absent — only FRAMEWORK_VERSION
 assert_file_contains "$LOGV" "^PREFLIGHT_FRAMEWORK_VERSION=unknown$" "FRAMEWORK_VERSION reports unknown when file absent"
 assert_file_contains "$LOGV" "^PREFLIGHT_API_ACCESS=ok" "downstream checks still run with VERSION absent"
 
+# --- Scenario W: PREFLIGHT_EMAIL_REPLY_TO=set when EMAIL_REPLY_TO is in profile ---
+# v1.9.0 carryover 5.4. Surfaces the EMAIL_DNS probe target so a forgotten
+# EMAIL_REPLY_TO doesn't masquerade as a DKIM pass on the wrong (DOMAIN)
+# fallback. `set` is non-blocking — exit code unchanged from baseline.
+
+echo ""
+echo "--- Scenario W: EMAIL_REPLY_TO=set with explicit value ---"
+TMPW=$(setup_env)
+write_account_config "$TMPW"
+CFG_EMAIL_REPLY_TO="hello@testproj.example.com" write_project_config "$TMPW"
+write_project_sourcing_chain "$TMPW"
+write_mock_bin "$TMPW"
+LOGW="$TMPW/preflight.log"
+exitW=$(run_preflight_capture "$TMPW" "$LOGW" || true)
+assert_equal "$exitW" "0" "exit 0 when EMAIL_REPLY_TO is set (non-blocking)"
+assert_file_contains "$LOGW" "^PREFLIGHT_EMAIL_REPLY_TO=set hello@testproj.example.com$" \
+  "EMAIL_REPLY_TO=set names the explicit address"
+
+# --- Scenario X: PREFLIGHT_EMAIL_REPLY_TO=fallback when EMAIL_REPLY_TO empty ---
+# Default scenario shape: no EMAIL_REPLY_TO in profile, DOMAIN populated. The
+# observability line names the DOMAIN being used as the fallback so the skill
+# can coach the user when an explicit reply-to subdomain is needed.
+
+echo ""
+echo "--- Scenario X: EMAIL_REPLY_TO=fallback when value empty ---"
+TMPX=$(setup_env)
+write_account_config "$TMPX"
+write_project_config "$TMPX"
+write_project_sourcing_chain "$TMPX"
+write_mock_bin "$TMPX"
+LOGX="$TMPX/preflight.log"
+exitX=$(run_preflight_capture "$TMPX" "$LOGX" || true)
+assert_equal "$exitX" "0" "exit 0 when EMAIL_REPLY_TO falls back to DOMAIN (non-blocking)"
+assert_file_contains "$LOGX" "^PREFLIGHT_EMAIL_REPLY_TO=fallback testproj.example.com$" \
+  "EMAIL_REPLY_TO=fallback names the DOMAIN being used"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}" "${TMPU:-}" "${TMPV:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}" "${TMPU:-}" "${TMPV:-}" "${TMPW:-}" "${TMPX:-}"' EXIT
 
 test_summary

@@ -85,8 +85,8 @@ resource "restapi_object" "custom_property" {
     # options key requirements per type:
     # - enumeration: populated array (one entry per consumer-declared option).
     # - bool: canonical True/False array — HubSpot CRM API rejects bool
-    #   property creation without it (Heard's v1.8.0 deploy hit this on
-    #   the auto-added <slug>_survey_completed property; v1.8.1 closes it).
+    #   property creation without it (applies to both consumer-declared
+    #   bools and the auto-added <slug>_survey_completed flag).
     # - string / number: key absent entirely; HubSpot rejects {options: []}
     #   on these types but accepts the key being missing.
     each.value.type == "enumeration" ? {
