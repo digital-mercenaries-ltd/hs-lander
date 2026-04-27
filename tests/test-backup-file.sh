@@ -69,7 +69,7 @@ echo ""
 echo "--- Scenario 4: LRU trim with HS_LANDER_BACKUP_KEEP=3 ---"
 TMP4=$(mktemp -d)
 echo "data" > "$TMP4/file.txt"
-for i in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
   HS_LANDER_BACKUP_KEEP=3 bash "$SCRIPT" "$TMP4/file.txt" "$TMP4/backups" >/dev/null 2>&1
   # Touch with distinct mtime so ls -t order is deterministic across systems
   # whose %N support varies. Sleep is unfortunate but small enough.
@@ -83,7 +83,7 @@ echo ""
 echo "--- Scenario 5: default HS_LANDER_BACKUP_KEEP=20 ---"
 TMP5=$(mktemp -d)
 echo "data" > "$TMP5/file.txt"
-for i in $(seq 1 22); do
+for _ in $(seq 1 22); do
   bash "$SCRIPT" "$TMP5/file.txt" "$TMP5/backups" >/dev/null 2>&1
   sleep 0.02 2>/dev/null || true
 done
@@ -99,9 +99,9 @@ echo "data" > "$TMP6/bb.txt"
 mkdir -p "$TMP6/backups"
 # Pre-populate backups for an unrelated basename — must not be trimmed
 for i in 1 2 3; do
-  echo "x" > "$TMP6/backups/bb.txt.fixture-$i"
+  echo "$i" > "$TMP6/backups/bb.txt.fixture-$i"
 done
-for i in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
   HS_LANDER_BACKUP_KEEP=2 bash "$SCRIPT" "$TMP6/aa.txt" "$TMP6/backups" >/dev/null 2>&1
   sleep 0.02 2>/dev/null || true
 done

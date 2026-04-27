@@ -133,7 +133,7 @@ echo ""
 echo "--- v1.9.0: profile backup LRU honours HS_LANDER_BACKUP_KEEP ---"
 # Run 22 more post-apply cycles with KEEP=3 and confirm trim.
 KEEP_DIR="$TMPDIR/home/.config/hs-lander/testacct/.profile-backups-keep3"
-for i in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
   HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" \
     HS_LANDER_PROJECT_DIR="$TMPDIR/project" \
     HS_LANDER_BACKUP_KEEP=3 \

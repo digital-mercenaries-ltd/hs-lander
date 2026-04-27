@@ -88,17 +88,28 @@ run_review() {
 export TF_PLUGIN_CACHE_DIR="$ROOT/.tf-plugin-cache"
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
+# Assert that $1 (text) contains a line matching the regex $2.
+assert_grep() {
+  local text="$1" pattern="$2" message="$3"
+  TESTS=$((TESTS + 1))
+  if echo "$text" | grep -q "$pattern"; then
+    PASSES=$((PASSES + 1))
+    echo "  PASS: $message"
+  else
+    FAILURES=$((FAILURES + 1))
+    echo "  FAIL: $message"
+    echo "    pattern: $pattern"
+    echo "    text:    $text" | head -5
+  fi
+}
+
 # --- Scenario 1: clean 6-create plan → ok, no severity line ---
 echo ""
 echo "--- Scenario 1: 6 creates, PLAN_REVIEW=ok ---"
 fx1=$(make_fixture "clean-6-creates" 6)
 out1=$(run_review "$fx1")
-echo "$out1" | grep -q '^PLAN_CREATE=6$' && \
-  { echo "  PASS: PLAN_CREATE=6"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_CREATE=6 (got: $(echo "$out1" | grep PLAN_CREATE))"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out1" | grep -q '^PLAN_REVIEW=ok$' && \
-  { echo "  PASS: PLAN_REVIEW=ok"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_REVIEW=ok"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out1" '^PLAN_CREATE=6$' "PLAN_CREATE=6"
+assert_grep "$out1" '^PLAN_REVIEW=ok$' "PLAN_REVIEW=ok"
 if echo "$out1" | grep -q '^PLAN_REVIEW_SEVERITY='; then
   echo "  FAIL: PLAN_REVIEW_SEVERITY present on ok plan"
   FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1))
@@ -118,15 +129,9 @@ echo ""
 echo "--- Scenario 2: 60 creates → confirm/caution ---"
 fx2=$(make_fixture "over-create" 60)
 out2=$(run_review "$fx2")
-echo "$out2" | grep -q '^PLAN_CREATE=60$' && \
-  { echo "  PASS: PLAN_CREATE=60"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_CREATE=60"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out2" | grep -q '^PLAN_REVIEW=confirm$' && \
-  { echo "  PASS: PLAN_REVIEW=confirm"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_REVIEW=confirm"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out2" | grep -q '^PLAN_REVIEW_SEVERITY=caution$' && \
-  { echo "  PASS: severity=caution"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: severity=caution"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out2" '^PLAN_CREATE=60$' "PLAN_CREATE=60"
+assert_grep "$out2" '^PLAN_REVIEW=confirm$' "PLAN_REVIEW=confirm"
+assert_grep "$out2" '^PLAN_REVIEW_SEVERITY=caution$' "severity=caution"
 
 # --- Scenario 3: threshold env-var override (HS_LANDER_MAX_CREATE) ---
 # Note: null_resource doesn't support pure in-place updates (trigger change
@@ -139,15 +144,9 @@ echo ""
 echo "--- Scenario 3: HS_LANDER_MAX_CREATE override trips caution ---"
 fx3=$(make_fixture "threshold-override" 6)
 out3=$(HS_LANDER_MAX_CREATE=3 run_review "$fx3")
-echo "$out3" | grep -q '^PLAN_CREATE=6$' && \
-  { echo "  PASS: PLAN_CREATE=6"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_CREATE=6"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out3" | grep -q '^PLAN_REVIEW=confirm$' && \
-  { echo "  PASS: PLAN_REVIEW=confirm under override"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_REVIEW=confirm under override"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out3" | grep -q '^PLAN_REVIEW_SEVERITY=caution$' && \
-  { echo "  PASS: severity=caution under override"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: severity=caution under override"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out3" '^PLAN_CREATE=6$' "PLAN_CREATE=6"
+assert_grep "$out3" '^PLAN_REVIEW=confirm$' "PLAN_REVIEW=confirm under override"
+assert_grep "$out3" '^PLAN_REVIEW_SEVERITY=caution$' "severity=caution under override"
 
 # --- Scenario 4: 1 destroy → severity=destructive ---
 echo ""
@@ -168,12 +167,8 @@ terraform {
 provider "null" {}
 TF
 out4=$(run_review "$fx4")
-echo "$out4" | grep -q '^PLAN_DELETE=1$' && \
-  { echo "  PASS: PLAN_DELETE=1"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_DELETE=1"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out4" | grep -q '^PLAN_REVIEW_SEVERITY=destructive$' && \
-  { echo "  PASS: severity=destructive on delete"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: severity=destructive on delete"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out4" '^PLAN_DELETE=1$' "PLAN_DELETE=1"
+assert_grep "$out4" '^PLAN_REVIEW_SEVERITY=destructive$' "severity=destructive on delete"
 
 # Verify line count == 8 on confirm
 lc4=$(echo "$out4" | grep -c '^PLAN_')
@@ -208,12 +203,8 @@ TF
 out5=$(run_review "$fx5")
 # Either replace==1 OR delete+create both bumped — the script normalises
 # delete+create into replace. Assert PLAN_REPLACE=1.
-echo "$out5" | grep -q '^PLAN_REPLACE=1$' && \
-  { echo "  PASS: PLAN_REPLACE=1"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_REPLACE=1 (got: $(echo "$out5" | grep PLAN_REPLACE))"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out5" | grep -q '^PLAN_REVIEW_SEVERITY=destructive$' && \
-  { echo "  PASS: severity=destructive on replace"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: severity=destructive on replace"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out5" '^PLAN_REPLACE=1$' "PLAN_REPLACE=1"
+assert_grep "$out5" '^PLAN_REVIEW_SEVERITY=destructive$' "severity=destructive on replace"
 
 # --- Scenario 6: mixed (60 creates + 1 destroy) → highest-severity-wins ---
 echo ""
@@ -242,14 +233,8 @@ resource "null_resource" "newitems" {
 }
 TF
 out6=$(run_review "$fx6")
-echo "$out6" | grep -q '^PLAN_CREATE=60$' && \
-  { echo "  PASS: PLAN_CREATE=60"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_CREATE=60 (got: $(echo "$out6" | grep PLAN_CREATE))"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out6" | grep -q '^PLAN_DELETE=1$' && \
-  { echo "  PASS: PLAN_DELETE=1"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: PLAN_DELETE=1"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
-echo "$out6" | grep -q '^PLAN_REVIEW_SEVERITY=destructive$' && \
-  { echo "  PASS: severity=destructive (highest wins)"; PASSES=$((PASSES+1)); TESTS=$((TESTS+1)); } || \
-  { echo "  FAIL: severity=destructive (highest wins)"; FAILURES=$((FAILURES+1)); TESTS=$((TESTS+1)); }
+assert_grep "$out6" '^PLAN_CREATE=60$' "PLAN_CREATE=60"
+assert_grep "$out6" '^PLAN_DELETE=1$' "PLAN_DELETE=1"
+assert_grep "$out6" '^PLAN_REVIEW_SEVERITY=destructive$' "severity=destructive (highest wins)"
 
 test_summary
