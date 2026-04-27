@@ -1,9 +1,10 @@
 # Plan: First-Class Hosting Modes via `LANDING_SLUG`
 
 **Date:** 2026-04-22
-**Status:** Pending
+**Status:** Complete (shipped retroactively in v1.5.0; status not updated at the time)
 **Scope:** Framework. Small additions to the landing-page module and scaffold template to support hosting modes beyond "connected custom domain". Landing-page module change only; no breaking change (new variable with a sensible default).
-**Target release:** could land with v1.4.0 or as a follow-up v1.4.1. Independent of the v1.4.0 drift fixes but benefits from being in the same scaffold sweep.
+**Target release:** shipped in v1.5.0 alongside the marketing-email restructure (`landing_slug` + `thankyou_slug` variables added to `terraform/modules/landing-page/variables.tf`; `pages.tf` consumes them; `tf.sh` exports them; `set-project-field.sh` allow-list includes them; `docs/framework.md` has the hosting-modes table).
+**v1.8.1 archive note:** plan status was carried forward as "Pending" through v1.7.0 even though the work shipped — bookkeeping artefact corrected during the v1.8.1 plan-archive sweep.
 **Context:** The Heard deploy (2026-04-22) exposed that the framework implicitly assumed one hosting mode — connected custom subdomain with pages at root via `isPrimaryLandingPage` flag. HubSpot Content Hub Starter limits accounts to one custom subdomain. The framework already hard-codes `slug = ""` in pages.tf (post-v1.4.0), which only works in the custom-domain mode. To support operators who need to use the HubSpot system domain or external redirect/iframe patterns, the landing slug must be configurable.
 
 ## Goal
