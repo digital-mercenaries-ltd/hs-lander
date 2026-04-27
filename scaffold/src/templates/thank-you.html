@@ -13,9 +13,28 @@
   <main class="thank-you">
     <h1>You're in.</h1>
     <p class="lede">Thanks for signing up. Check your inbox in the next minute or two for a welcome email from __BRAND_NAME__.</p>
+
+    <!--
+      Survey form (Forms Submissions API; static markup for design control).
+      Skill (or hand-edit) replaces the placeholder fields below with the
+      project's actual survey questions. Keep:
+      - data-survey-form on the <form> (survey-submit.js binds to this)
+      - <input name="..."> attributes matching survey_fields[].name in the
+        landing-page module call (test-deployment.sh asserts alignment)
+      - data-other-overflow-for="<primary-field-name>" on overflow inputs
+        when a primary field has other_overflow = true; survey-submit.js
+        reveals these conditionally and includes them as <field>_other on
+        submit.
+    -->
+    <form data-survey-form class="survey-form">
+      <p class="survey-placeholder">Survey form placeholder — skill will replace with project-specific questions.</p>
+      <button type="submit">Send answers</button>
+    </form>
+
     <p><a href="https://__DOMAIN__/">Return to __BRAND_NAME__</a></p>
   </main>
   <script src="{{ get_asset_url('__DM_PATH__/js/tracking.js') }}"></script>
+  <script src="{{ get_asset_url('__DM_PATH__/js/survey-submit.js') }}" defer></script>
   {{ standard_footer_includes }}
 </body>
 </html>

@@ -48,6 +48,19 @@ variable "capture_form_fields" {
   description = "Additional capture form fields beyond email"
 }
 
+variable "capture_post_submit_action_override" {
+  type        = any
+  default     = {}
+  description = <<EOT
+Override the default capture-form postSubmitAction with a custom one. Empty
+object (default) uses the framework's redirect_url to the project's thank-you
+slug with ?email={{email}} merge token, which lets the survey form on
+thank-you.html attribute submissions to the captured contact. Pass e.g.
+{ type = "thank_you", value = "Thanks for submitting." } to keep the inline
+HubSpot thank-you snippet (v1.7.x default).
+EOT
+}
+
 variable "include_survey" {
   type        = bool
   default     = false
@@ -62,13 +75,46 @@ variable "survey_form_name" {
 
 variable "survey_fields" {
   type = list(object({
-    name     = string
-    label    = string
-    type     = string
-    required = optional(bool, false)
+    name           = string
+    label          = string
+    type           = string
+    required       = optional(bool, false)
+    options        = optional(list(string), [])
+    other_overflow = optional(bool, false)
   }))
   default     = []
-  description = "Survey form field definitions"
+  description = <<EOT
+Survey form field definitions. Each field declares:
+- name: HubSpot internal field name (matches a custom_properties entry by name)
+- label: visible label
+- type: one of "single_line_text", "dropdown", "multiple_checkboxes", "radio"
+- required: bool (default false)
+- options: list of strings — REQUIRED when type ∈ {dropdown, multiple_checkboxes, radio};
+  ignored otherwise.
+- other_overflow: bool (default false) — when true AND options[] contains "Other"
+  (or any case-insensitive variant), the framework emits a sibling
+  "<field.name>_other" string CRM property + HubSpot form field so the static
+  thank-you form's overflow text input has a backing field. Ignored when
+  type = "single_line_text".
+EOT
+
+  validation {
+    condition = alltrue([
+      for f in var.survey_fields : (
+        contains(["single_line_text", "dropdown", "multiple_checkboxes", "radio"], f.type)
+      )
+    ])
+    error_message = "survey_fields[].type must be one of: single_line_text, dropdown, multiple_checkboxes, radio."
+  }
+
+  validation {
+    condition = alltrue([
+      for f in var.survey_fields : (
+        f.type == "single_line_text" || length(f.options) > 0
+      )
+    ])
+    error_message = "survey_fields[] of type dropdown / multiple_checkboxes / radio must declare a non-empty options list."
+  }
 }
 
 variable "privacy_text" {
@@ -165,9 +211,43 @@ variable "custom_properties" {
     name      = string
     label     = string
     type      = string
-    fieldType = string
+    fieldType = optional(string, "")
     groupName = optional(string, "contactinformation")
+    options   = optional(list(string), [])
   }))
   default     = []
-  description = "Additional CRM contact properties for this project"
+  description = <<EOT
+Additional CRM contact properties for this project. Each property declares:
+- name: HubSpot internal name
+- label: visible label
+- type: "string" | "enumeration" | "bool" | "number"
+- fieldType: "text" | "select" | "checkbox" | "radio" | "booleancheckbox" | "number"
+  (auto-defaulted from type when omitted: string→text, enumeration→select,
+  bool→booleancheckbox, number→number)
+- groupName: HubSpot property group; defaults to "contactinformation"
+- options: list of strings — REQUIRED when type = "enumeration"; ignored otherwise
+
+Survey form fields with type ∈ {dropdown, multiple_checkboxes, radio} should
+map to custom_properties entries with type = "enumeration" and matching
+options. The skill generates these in lockstep so submitted values land in
+constrained CRM properties cleanly.
+EOT
+
+  validation {
+    condition = alltrue([
+      for p in var.custom_properties : (
+        contains(["string", "enumeration", "bool", "number"], p.type)
+      )
+    ])
+    error_message = "custom_properties[].type must be one of: string, enumeration, bool, number."
+  }
+
+  validation {
+    condition = alltrue([
+      for p in var.custom_properties : (
+        p.type != "enumeration" || length(p.options) > 0
+      )
+    ])
+    error_message = "custom_properties[] of type enumeration must declare a non-empty options list."
+  }
 }

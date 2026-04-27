@@ -233,4 +233,56 @@ if [[ -n "${DM_UPLOAD_PATH:-}" ]]; then
   esac
 fi
 
+# v1.8.0 Schema-alignment: the static survey form on thank-you.html, the
+# HubSpot-defined survey form (Terraform), and the project's CRM custom
+# properties must declare matching field/property names. Drift between any
+# two of them produces a silent failure where the form looks fine but
+# submissions land in the wrong (or no) CRM property. Three-way diff via
+# `comm -3`; empty diff means alignment.
+if [[ "${INCLUDE_SURVEY:-false}" == "true" ]] && [[ -n "${SURVEY_FORM_ID:-}" ]] && [[ -n "${PROJECT_SLUG:-}" ]]; then
+  echo ""
+  echo "--- Schema alignment (static form ↔ HubSpot survey form ↔ custom_properties) ---"
+
+  # Names <input name="..."> attributes in the static thank-you form,
+  # filtered to those prefixed with the project slug (skips `email`,
+  # `project_source`, etc.).
+  static_names=$(grep -oE 'name="[a-zA-Z0-9_]+"' "$LANDING_HTML_FILE" "$THANKYOU_HTML_FILE" 2>/dev/null \
+    | sed 's/.*name="\([^"]*\)"/\1/' \
+    | sort -u \
+    | grep -E "^${PROJECT_SLUG}_" || true)
+
+  hubspot_names=$(curl -s \
+    -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
+    "https://api.hubapi.com/marketing/v3/forms/${SURVEY_FORM_ID}" \
+    | jq -r '.fieldGroups[].fields[].name' \
+    | sort -u \
+    | grep -E "^${PROJECT_SLUG}_" || true)
+
+  prop_names=$(curl -s \
+    -H "Authorization: Bearer ${HUBSPOT_TOKEN}" \
+    "https://api.hubapi.com/crm/v3/properties/contacts" \
+    | jq -r --arg slug "${PROJECT_SLUG}" '.results[] | select(.name | startswith($slug + "_")) | select(.name != $slug + "_survey_completed") | .name' \
+    | sort -u || true)
+
+  # Pairwise diffs. comm -3 outputs lines unique to one side or the other;
+  # empty result means full overlap.
+  diff_static_hubspot=$(comm -3 <(printf '%s\n' "$static_names") <(printf '%s\n' "$hubspot_names") | tr -d '\t')
+  diff_static_props=$(comm -3 <(printf '%s\n' "$static_names") <(printf '%s\n' "$prop_names") | tr -d '\t')
+
+  if [[ -z "$diff_static_hubspot" ]] && [[ -z "$diff_static_props" ]]; then
+    static_count=$(printf '%s\n' "$static_names" | grep -c . || true)
+    assert_equal "true" "true" "schema alignment ($static_count survey fields aligned across static / HubSpot / CRM)"
+  else
+    if [[ -n "$diff_static_hubspot" ]]; then
+      echo "  static form ↔ HubSpot survey form mismatch:"
+      printf '%s\n' "$diff_static_hubspot" | sed 's/^/    /'
+    fi
+    if [[ -n "$diff_static_props" ]]; then
+      echo "  static form ↔ custom_properties mismatch:"
+      printf '%s\n' "$diff_static_props" | sed 's/^/    /'
+    fi
+    assert_equal "aligned" "drifted" "schema alignment (static / HubSpot / CRM names match)"
+  fi
+fi
+
 test_summary

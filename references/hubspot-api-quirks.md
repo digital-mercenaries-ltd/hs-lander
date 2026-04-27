@@ -153,6 +153,38 @@ Subscription/add-on identifiers may live under `subscriptions[]` or `extensions[
 
 Same as the Lists race above; consolidated entry kept here for cross-reference. See "Lists v3 — property must exist before list-creation references it."
 
+## DKIM selector pattern — `hs1-<portal-id>` and `hs2-<portal-id>`
+
+**Quirk:** HubSpot's portal-specific DKIM selectors follow a predictable pattern: `hs1-<portal-id>._domainkey.<domain>` and `hs2-<portal-id>._domainkey.<domain>` (both as CNAME records). The pattern is portal-agnostic across portals sampled to date.
+
+**Don't use `dig +short ANY` to probe** — Cloudflare and other modern authoritative DNS servers respond with an empty/refusal answer per RFC 8482. Use typed `dig +short CNAME <selector>._domainkey.<domain>`.
+
+**Framework handling:** `scripts/preflight.sh` v1.8.0+ probes both selectors via typed CNAME query. See `references/email-auth-dns.md`.
+
+## Forms v3 — capture form `postSubmitAction.value` merge tokens
+
+**Quirk:** When `postSubmitAction.type = "redirect_url"`, the `value` URL accepts merge tokens HubSpot substitutes from the form submission. The framework defaults to `?email={{email}}` for capture-form redirects so the survey form on the thank-you page can attribute submissions to the captured contact.
+
+**TODO (verify):** the exact merge-token syntax is one of `{{email}}`, `{{form_field.email}}`, `{{contact.email}}`, or `{email}`. The most-documented form is `{{email}}`; v1.8.0 ships with that and flags Prerequisite A in the v1.8.0 plan for live verification. Update the default in `terraform/modules/landing-page/forms.tf` if probes show the live syntax differs.
+
+## Forms Submissions API — secure submit endpoint
+
+**Quirk:** `https://api.hsforms.com/submissions/v3/integration/secure/submit/<portal>/<form-id>` accepts cross-origin POSTs only when the request origin is on the portal's connected-domains allowlist. Same shape as `/integration/submit/` (no `/secure/`), different security profile. Submitting from an arbitrary origin returns 403.
+
+**Framework handling:** `scaffold/src/js/survey-submit.js` POSTs to the secure endpoint. The project's domain is on the connected-domains allowlist (set up during landing-page deploy via `cms/v3/domains` flow), so submissions from the live thank-you page work.
+
+## SPF mechanism order matters — `all` must be last
+
+**Quirk:** SPF mechanism evaluation is left-to-right; anything after `all` (the catch-all token) is silently ignored by recipient validators. Records like `"v=spf1 ~all include:..."` look plausible to a human but the include never gets evaluated.
+
+**Framework handling:** `PREFLIGHT_EMAIL_DNS=spf-all-mid-record` detects this and surfaces it before deploy.
+
+## Capture form `formType = "hubspot"` required (v3)
+
+**Quirk:** Forms v3 introduced a `formType` field at the form root. v2 didn't have it. Forms created via API without `formType` are rejected silently in some scenarios and visibly in others.
+
+**Framework handling:** `terraform/modules/landing-page/forms.tf` declares `formType = "hubspot"` on both `capture_form` and `survey_form`. Test fixture asserts both payloads have it.
+
 ## CRM property — `objectTypeId = "0-1"` always
 
 **Quirk:** Every contact-side custom property requires `objectTypeId = "0-1"`. Form fields likewise. Other object types use different IDs but landing pages in the framework only deal with contacts.
