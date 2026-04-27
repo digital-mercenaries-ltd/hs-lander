@@ -45,16 +45,31 @@ if ! cp -p "$src" "$dest" 2>/dev/null; then
   exit 1
 fi
 
-# Trim to $keep most recent matching backups. Filenames are controlled
-# (timestamp-suffixed) so ls/grep/tail is safe here. cp -p preserved mtime
-# above so ls -t orders by backup creation time.
-pattern="$(basename "$src")."
-# shellcheck disable=SC2012
-ls -1t "$backup_dir" 2>/dev/null \
-  | grep -F "$pattern" \
-  | tail -n +$((keep + 1)) \
-  | while IFS= read -r old; do
-      rm -f "$backup_dir/$old"
-    done
+# Trim to $keep most recent matching backups. Use a glob (filenames are
+# controlled — timestamp-suffixed — so the glob is safe). cp -p preserved
+# mtime above; sort by mtime descending via stat + sort, no `ls | grep`.
+prefix="$(basename "$src")."
+matches=()
+shopt -s nullglob
+for f in "$backup_dir"/"$prefix"*; do
+  matches+=("$f")
+done
+shopt -u nullglob
+
+if (( ${#matches[@]} > keep )); then
+  # Sort matches by mtime descending. stat -f for BSD, stat -c for GNU.
+  if [[ "$(uname)" == "Darwin" ]]; then
+    stat_fmt=(stat -f '%m %N')
+  else
+    stat_fmt=(stat -c '%Y %n')
+  fi
+  while IFS=' ' read -r _mtime path_line; do
+    rm -f "$path_line"
+  done < <(
+    "${stat_fmt[@]}" "${matches[@]}" \
+      | sort -rn \
+      | tail -n +$((keep + 1))
+  )
+fi
 
 echo "BACKUP=ok $dest"
