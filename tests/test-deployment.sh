@@ -46,7 +46,19 @@ echo ""
 echo "--- Landing page content ---"
 
 LANDING_HTML_FILE=$(mktemp)
-trap 'rm -f "$LANDING_HTML_FILE" "$THANKYOU_HTML_FILE" "$LANDING_TOKENS_DIR" "$THANKYOU_TOKENS_DIR"' EXIT
+# v1.7.1: rm -f errors on directory paths under set -e, aborting the test
+# script before the v1.7.0 served-asset checks ran. Split into files vs
+# directories with a cleanup function. Late-bound paths (THANKYOU_HTML_FILE,
+# *_TOKENS_DIR, CSS_FILE) are checked for existence at cleanup time so the
+# function tolerates whichever scenario aborts the script.
+cleanup_test_artifacts() {
+  rm -f "${LANDING_HTML_FILE:-}"
+  rm -f "${THANKYOU_HTML_FILE:-}"
+  rm -f "${CSS_FILE:-}"
+  rm -rf "${LANDING_TOKENS_DIR:-}"
+  rm -rf "${THANKYOU_TOKENS_DIR:-}"
+}
+trap cleanup_test_artifacts EXIT
 
 curl -s "$LANDING_URL" > "$LANDING_HTML_FILE"
 assert_file_contains "$LANDING_HTML_FILE" "hbspt.forms.create" \
@@ -193,8 +205,9 @@ assert_file_contains "$LANDING_HTML_FILE" "/hs/scriptloader/${HUBSPOT_PORTAL_ID}
 # Check 4 (v1.7.0): prefers-color-scheme block in fetched CSS. Catches
 # minification stripping the @media block or scaffold drift back to single-mode.
 if [[ -n "$css_url" ]] && [[ "$css_status" == "200" ]]; then
+  # CSS_FILE is picked up by cleanup_test_artifacts on EXIT (its trap was
+  # installed at the top of the script and tolerates unset/missing paths).
   CSS_FILE=$(mktemp)
-  trap 'rm -f "$LANDING_HTML_FILE" "$THANKYOU_HTML_FILE" "$LANDING_TOKENS_DIR" "$THANKYOU_TOKENS_DIR" "$CSS_FILE"' EXIT
   curl -s "$css_url" > "$CSS_FILE"
   assert_file_contains "$CSS_FILE" "prefers-color-scheme" \
     "served CSS contains @media (prefers-color-scheme: dark) block"

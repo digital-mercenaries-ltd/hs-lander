@@ -75,7 +75,9 @@ assert_file_not_contains "$TMP1/cfg/dml/heard.sh" 'HOSTING_MODE_HINT=""' "stub d
 # v1.7.0 module flags — commented placeholders only (skill activates per project)
 assert_file_contains "$TMP1/cfg/dml/heard.sh" '# AUTO_PUBLISH_WELCOME_EMAIL' "stub mentions AUTO_PUBLISH_WELCOME_EMAIL placeholder"
 assert_file_contains "$TMP1/cfg/dml/heard.sh" '# EMAIL_PREVIEW_TEXT' "stub mentions EMAIL_PREVIEW_TEXT placeholder"
-assert_file_contains "$TMP1/cfg/dml/heard.sh" '# INCLUDE_BOTTOM_CTA' "stub mentions INCLUDE_BOTTOM_CTA placeholder"
+# INCLUDE_BOTTOM_CTA removed in v1.7.1 — variable was advisory-only and
+# consumers were misled into setting false expecting effect.
+assert_file_not_contains "$TMP1/cfg/dml/heard.sh" 'INCLUDE_BOTTOM_CTA' "stub does NOT seed INCLUDE_BOTTOM_CTA (removed in v1.7.1)"
 
 # --- Scenario 2: account missing → SCAFFOLD=error account-missing, exit 1 ---
 echo ""

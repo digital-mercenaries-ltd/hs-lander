@@ -127,7 +127,6 @@ THANKYOU_SLUG="thank-you"
 # preserve v1.6.7 behaviour; uncomment + set when you want to override.
 # EMAIL_PREVIEW_TEXT=""             # Inbox preview line; empty disables the preview_text widget
 # AUTO_PUBLISH_WELCOME_EMAIL=true   # Skill flips to false on Starter portals (publish endpoint scope-gated)
-# INCLUDE_BOTTOM_CTA=true           # Advisory metadata only — scaffold ships bottom CTA always-on; opt out by editing the template
 EOF
   echo "SCAFFOLD_PROJECT_PROFILE=created $project_profile"
 fi

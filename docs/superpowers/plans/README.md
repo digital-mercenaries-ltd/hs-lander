@@ -32,6 +32,7 @@ Plans that have been implemented and are reflected in the framework source.
 | 2026-04-26-v1.6.6-upload-multipart.md | Complete | v1.6.6 |
 | 2026-04-26-v1.6.7-email-rendering-and-form-hide.md | Complete | v1.6.7 |
 | 2026-04-26-v1.7.0-scaffold-hubl-and-tier-aware-preflight.md | Complete | v1.7.0 |
+| 2026-04-27-v1.7.1-bugfixes-and-script-refresh.md | Complete | v1.7.1 |
 
 ### In-flight
 

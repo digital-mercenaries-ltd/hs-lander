@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.7.1 (2026-04-27)
+
+Patch — four surgical fixes surfaced by the v1.7.0 deploy round. Test EXIT trap repair, removal of an advisory-only module variable that was misleading consumers, correction of v1.6.7's migration note, and a sanctioned helper for refreshing project-local scripts (R9). Non-breaking; `terraform plan` against v1.7.1 shows zero changes for a v1.7.0 project.
+
+### Fixed
+
+- **`tests/test-deployment.sh` EXIT trap aborted before v1.7.0 served-asset checks.** The trap used `rm -f` for paths created via `mktemp -d`. Under `set -e` the directory `rm -f`s errored, terminating the script before reaching the new served-asset section. Consumers saw "8/8 passed" — the original base tests — and silently missed CSS-200, `hub_generated/template_assets`, scriptloader, `prefers-color-scheme`, `templateType: page` annotation, and `preview_text` widget checks entirely. Trap is now a `cleanup_test_artifacts` function with explicit `rm -f` (files) and `rm -rf` (directories), and tolerates unset/missing late-bound paths so partial-run cleanups don't error.
+- **v1.6.7 CHANGELOG migration note overstated PATCH-strip behaviour.** The original note said "PATCH cannot fix existing welcome_email — HubSpot strips flexAreas on PATCH" and prescribed `terraform taint` + recreate as the only path. Empirical evidence is more nuanced: PATCH preserves `flexAreas` when the request body contains the complete section/column envelope. v1.6.7's `update_data` carries the complete structure, so plain `terraform apply` updates existing welcome_email resources in place without recreate. The v1.6.7 migration block is corrected with a v1.7.1-callout banner; consumers stuck on a pre-v1.6.7 broken-PATCH state should try `apply` first, falling back to taint+recreate only if needed. Recreate changes the email ID — re-publishing in UI and re-wiring form follow-up are required after a recreate, both avoidable by plain apply.
+
+### Removed
+
+- **`include_bottom_cta` module variable.** It was advisory-only in v1.7.0 (the scaffold hardcoded the bottom CTA regardless of the variable's value) and misleading consumers who set `false` expecting the second form embed to disappear. Removed from `terraform/modules/landing-page/variables.tf`, `scripts/tf.sh`'s `TF_VAR_*` exports, `scripts/set-project-field.sh` allow-list, and `scaffold-project.sh`'s project-profile stub. To remove the bottom CTA in your project, delete the second `hbspt.forms.create` instance from `src/templates/landing-page.html` — same effect, no variable indirection. `INCLUDE_BOTTOM_CTA` in your project profile (if present) is now ignored — `set-project-field.sh` rejects new attempts to set it. A future release with a real templating layer may reintroduce a properly-wired equivalent.
+
+### Added
+
+- **`scripts/upgrade-project-scripts.sh`** — sanctioned helper for refreshing project-local `scripts/` on framework version bumps. Replaces the manual `rm -rf scripts && cp -r $FRAMEWORK_HOME/scripts ...` dance that's been required since v1.5.0 (R9 in `docs/roadmap.md`). Backs up existing `scripts/` to a timestamped `scripts.bak.<ts>/` directory before replacing. Refreshes the `lib/` subdirectory in lockstep (added in v1.7.0 for `tier-classify.sh`). Idempotent. Usage: `bash $FRAMEWORK_HOME/scripts/upgrade-project-scripts.sh [/path/to/project]`.
+
+### Migration
+
+All v1.7.1 changes are non-breaking for in-place upgrades:
+
+- Test fix is purely additive (more checks now run).
+- `include_bottom_cta` removal — consumers who left it at the default `true` see no change. Consumers who set it `false` were already getting `true` behaviour due to the missing wiring; removal makes the variable's absence honest.
+- CHANGELOG correction is docs-only.
+- `upgrade-project-scripts.sh` is additive and optional.
+
+`terraform plan` against v1.7.1 should show zero changes for a v1.7.0 project. To upgrade:
+
+```bash
+bash $FRAMEWORK_HOME/scripts/upgrade-project-scripts.sh
+# bump ?ref=v1.7.0 → ?ref=v1.7.1 in terraform/main.tf
+bash scripts/tf.sh init -upgrade
+bash scripts/tf.sh plan
+```
+
+If `INCLUDE_BOTTOM_CTA=...` is set in your project profile, remove the line at your convenience — it's ignored, and a `set-project-field.sh` invocation that tries to set it now returns `SET_FIELD=error unknown-key INCLUDE_BOTTOM_CTA`.
+
 ## v1.7.0 (2026-04-26)
 
 Minor release. Substantial scaffold redesign (HubL templates, dark-mode CSS, welcome-email anatomy), preview-text widget on welcome emails, tier-aware preflight, `auto_publish_welcome_email` module flag (Starter portals can suppress the publish step), allow-list updates, and three reference docs documenting the patterns. Six new served-asset/template-metadata checks in `tests/test-deployment.sh`. All new module variables have defaults that preserve v1.6.7 behaviour for existing consumers.
@@ -89,19 +126,29 @@ Patch — two source fixes plus four narrow API-level tests. Welcome emails crea
 
 ### Migration
 
-This is the critical migration call: **PATCH cannot fix existing welcome_email resources.** The `/marketing/v3/emails` PATCH surface silently strips `flexAreas` to `{}` (confirmed empirically). Consumers upgrading from v1.6.6 → v1.6.7 will get `body.html` written via PATCH but no layout placement, leaving the email still empty.
+> **v1.7.1 correction.** This migration block originally said *"PATCH cannot fix existing welcome_email resources — HubSpot strips flexAreas on PATCH"* and prescribed `terraform taint` + recreate as the required path. Empirical evidence from the v1.7.0 deploy round is more nuanced: PATCH **preserves** `flexAreas` when the request body contains the **complete** section/column envelope (sections, columns, `path: null`, `breakpointStyles`, etc.). The "stripped to `{main: {}}`" failure mode happened with incomplete envelopes; v1.6.7's `update_data` carries the complete structure, so plain `terraform apply` updates an existing `welcome_email` in place without taint or recreate. Try `apply` first; only fall back to taint+recreate if apply leaves the layout still empty.
 
-Required upgrade sequence per consumer:
+The welcome-email widget-shape fix takes effect on v1.6.7+ via either PATCH or CREATE. From v1.6.7 onward, `update_data` contains the complete `flexAreas` structure, so a plain `terraform apply` updates existing welcome_email resources in place.
 
 ```bash
 # In project directory:
+bash scripts/tf.sh apply
+```
+
+If apply alone doesn't repair the layout (HubSpot's PATCH may have locked the resource into a state where re-applying the same payload is a no-op), fall back to taint + recreate:
+
+```bash
 bash scripts/tf.sh taint module.landing_page.restapi_object.welcome_email
 bash scripts/tf.sh apply
 ```
 
-The `taint` triggers a destroy + recreate; the `data` (POST) payload includes the full `flexAreas` shape, so the recreated email lands correct. `terraform_data.publish_welcome_email` re-fires automatically because its `triggers_replace` is keyed on the email ID.
+Note that recreate changes the welcome_email ID, requiring you to:
+- Re-publish in HubSpot UI (recreated email goes to AUTOMATED_DRAFT)
+- Re-wire any form follow-up email setting (Marketing → Forms → Follow-up tab) since it references the old ID
 
-**On Starter portals**, that re-fire will surface a `MISSING_SCOPES` error from HubSpot:
+Plain in-place PATCH avoids both. Try it first.
+
+**On Starter portals**, the recreate path's auto-publish step surfaces a `MISSING_SCOPES` error from HubSpot:
 
 ```
 This app hasn't been granted all required scopes.
