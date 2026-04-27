@@ -248,4 +248,33 @@ echo "--- Domain matches config ---"
 assert_file_contains "$PLAN_TXT" "test.example.com" \
   "domain appears in plan"
 
+echo ""
+echo "--- v1.9.0 5.5: custom_properties type allow-list rejects unsupported types ---"
+# A separate fixture declares custom_properties[].type = "datetime" — outside
+# the {string, number, enumeration, bool} allow-list. The landing-page module's
+# `validation` block on var.custom_properties must reject this at plan time so
+# the failure surfaces before any HubSpot API call (HubSpot returns 400 on
+# unsupported types — without plan-time validation the apply runs partway and
+# leaves the plan in a half-applied state).
+BAD_HARNESS_DIR="$REPO_DIR/tests/fixtures/terraform-bad-property-type"
+terraform -chdir="$BAD_HARNESS_DIR" init -backend=false -input=false >/dev/null 2>&1 || {
+  echo "terraform init failed for bad-fixture — re-running with output:"
+  terraform -chdir="$BAD_HARNESS_DIR" init -backend=false -input=false
+  exit 1
+}
+BAD_PLAN_OUT="$BAD_HARNESS_DIR/plan.txt"
+trap 'rm -f "$PLAN_FILE" "$PLAN_TXT" "$PLAN_JSON" "$BAD_PLAN_OUT"' EXIT
+set +e
+terraform -chdir="$BAD_HARNESS_DIR" plan -input=false -no-color >"$BAD_PLAN_OUT" 2>&1
+bad_plan_rc=$?
+set -e
+if [[ "$bad_plan_rc" -ne 0 ]]; then
+  result="true"
+else
+  result="false"
+fi
+assert_equal "$result" "true" "terraform plan fails on unsupported custom_properties type"
+assert_file_contains "$BAD_PLAN_OUT" "custom_properties\[\]\.type must be one of: string, enumeration, bool, number" \
+  "plan failure surfaces the allow-list error message"
+
 test_summary

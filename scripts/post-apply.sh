@@ -43,6 +43,10 @@ fi
 #   silently routing IO failures to the append branch.
 # - Sed-escapes the value so |, &, and \ in future string-valued outputs
 #   round-trip cleanly.
+# - Operates on whichever $file the caller passes — see the tempfile +
+#   atomic-mv pattern below for why callers should NOT point this at the
+#   live profile directly. v1.9.0 carryover 5.8 closed the partial-write
+#   hole the v1.8.1 hardening surfaced.
 _update_field() {
   local key="$1" value="$2" file="$3"
   local rc=0
@@ -68,10 +72,21 @@ capture_form_id=$(terraform -chdir="$TF_DIR" output -raw capture_form_id 2>/dev/
 survey_form_id=$(terraform -chdir="$TF_DIR" output -raw survey_form_id 2>/dev/null || echo "")
 list_id=$(terraform -chdir="$TF_DIR" output -raw list_id 2>/dev/null || echo "")
 
-# Update project config file (in $HS_LANDER_CONFIG_DIR, not the project dir)
-_update_field "CAPTURE_FORM_ID" "$capture_form_id" "$CONFIG_FILE"
-_update_field "SURVEY_FORM_ID" "$survey_form_id" "$CONFIG_FILE"
-_update_field "LIST_ID" "$list_id" "$CONFIG_FILE"
+# Atomic-write pattern: copy the live profile to a tempfile in the same
+# directory (same filesystem → mv is atomic), apply all three field updates
+# against the tempfile, then atomic-`mv` over the live path on success. An
+# EXIT trap removes the tempfile if anything aborts mid-update — the live
+# profile never sees a partial rewrite. set-project-field.sh uses the same
+# shape; aligning here closes the v1.8.1 partial-write hole (carryover 5.8).
+TMP_CONFIG_FILE="$(mktemp "${CONFIG_FILE}.XXXXXX")"
+trap 'rm -f "$TMP_CONFIG_FILE"' EXIT
+cp "$CONFIG_FILE" "$TMP_CONFIG_FILE"
+
+_update_field "CAPTURE_FORM_ID" "$capture_form_id" "$TMP_CONFIG_FILE"
+_update_field "SURVEY_FORM_ID" "$survey_form_id" "$TMP_CONFIG_FILE"
+_update_field "LIST_ID" "$list_id" "$TMP_CONFIG_FILE"
+
+mv "$TMP_CONFIG_FILE" "$CONFIG_FILE"
 
 echo "Config updated: $CONFIG_FILE"
 echo "  CAPTURE_FORM_ID=$capture_form_id"
