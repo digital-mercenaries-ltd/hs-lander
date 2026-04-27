@@ -70,6 +70,10 @@ setup_env() {
   cp "$REPO_DIR/scripts/lib/tier-classify.sh" "$dir/project/scripts/lib/tier-classify.sh"
   cp "$REPO_DIR/scripts/lib/source-vars.sh" "$dir/project/scripts/lib/source-vars.sh"
   cp "$REPO_DIR/scripts/lib/keychain.sh" "$dir/project/scripts/lib/keychain.sh"
+  # Decomposed checks live in scripts/preflight.d/ — copy the whole tree so
+  # the runner's glob loop resolves in the sandbox (v1.9.0 Component 3).
+  mkdir -p "$dir/project/scripts/preflight.d"
+  cp "$REPO_DIR/scripts/preflight.d/"*.sh "$dir/project/scripts/preflight.d/"
   # VERSION file at the project root, mirroring scaffold-project.sh layout.
   # preflight.sh resolves VERSION from its own script location, so this sits
   # at $dir/project/VERSION (one level up from $dir/project/scripts/).
