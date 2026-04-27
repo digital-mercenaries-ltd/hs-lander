@@ -82,8 +82,13 @@ resource "restapi_object" "custom_property" {
       fieldType = each.value.fieldType
       groupName = each.value.groupName
     },
-    # options key only when populated. HubSpot rejects {options: []} on
-    # non-enumeration types but accepts the key being entirely absent.
+    # options key requirements per type:
+    # - enumeration: populated array (one entry per consumer-declared option).
+    # - bool: canonical True/False array — HubSpot CRM API rejects bool
+    #   property creation without it (Heard's v1.8.0 deploy hit this on
+    #   the auto-added <slug>_survey_completed property; v1.8.1 closes it).
+    # - string / number: key absent entirely; HubSpot rejects {options: []}
+    #   on these types but accepts the key being missing.
     each.value.type == "enumeration" ? {
       options = [
         for i, opt in each.value.options : {
@@ -92,6 +97,11 @@ resource "restapi_object" "custom_property" {
           displayOrder = i
           hidden       = false
         }
+      ]
+      } : each.value.type == "bool" ? {
+      options = [
+        { label = "True", value = "true", displayOrder = 0, hidden = false },
+        { label = "False", value = "false", displayOrder = 1, hidden = false },
       ]
     } : {},
   ))

@@ -66,6 +66,7 @@ npm run deploy             # Upload to HubSpot Design Manager
 | `__DOMAIN__` | `DOMAIN` |
 | `__GA4_ID__` | `GA4_MEASUREMENT_ID` |
 | `__DM_PATH__` | `DM_UPLOAD_PATH` |
+| `__PROJECT_SLUG__` | `PROJECT_SLUG` (used by `survey-submit.js` to compose the `<slug>_survey_completed` property name; v1.8.0) |
 
 ## Terraform Modules
 
@@ -83,29 +84,31 @@ Required inputs:
 - `hubspot_subscription_id` and `hubspot_office_location_id` — per-portal values from HubSpot UI (Settings → Marketing → Email → Subscription Types / Office Locations). The welcome email's `subscriptionDetails` payload is rejected without them. Scope-restricted lookup isn't available with the framework's default scope set; user provides them once in the account profile.
 - `email_body_html` — the welcome email's HTML body content, injected into the DnD `primary_rich_text_module` widget. Scaffold reads it via `file("${path.module}/../dist/emails/welcome-body.html")`.
 
-Both modules use the Mastercard/restapi provider (~1.19) and inherit the provider configuration from the consuming project's root module.
+Both modules use the Mastercard/restapi provider (`~> 2.0`, since v1.6.1) and inherit the provider configuration from the consuming project's root module.
 
 **Sender verification (prerequisite):** the `email_reply_to` address must be a verified sender on the HubSpot portal. HubSpot will accept resource creation with an unverified address but the welcome email workflow will not deliver when triggered. Verify the address in HubSpot UI: Marketing → Email → Settings → From Address before relying on send.
 
-**project_source segmentation field (scaffold CSS requirement):** every form includes a `project_source` field (single_line_text with defaultValue = project slug) so contact-list filtering by project works. HubSpot Forms API v3 dropped the `hidden` fieldType, so this field renders as a visible text input unless hidden by scaffolded CSS. Scaffolded `src/css/main.css` must include:
+**project_source segmentation field (canonical hidden):** every form includes a `project_source` field (single_line_text with `hidden = true` at the form-field level since v1.6.7 and `defaultValue = project slug`) so contact-list filtering by project works. The form-level `hidden` flag is HubSpot's documented mechanism on Forms v3; scaffolded `src/css/main.css` includes belt-and-braces selectors for portals where v3 markup hasn't fully propagated:
 
 ```css
 .hs-form input[name="project_source"],
 .hs-form .hs_project_source { display: none !important; }
 ```
 
-Without this, the rendered form shows a pre-filled "Project Source" text field to visitors.
+The CSS alone is no longer load-bearing — but it doesn't hurt to keep it.
 
-**Stuck pre-v1.6.0 welcome emails.** Emails created by framework ≤ v1.5.0 have `type = "BATCH_EMAIL"` / `state = "DRAFT"` / `isPublished = false`. From v1.6.0 the PATCH payload deliberately omits those fields — HubSpot's `/marketing/v3/emails/{id}` PATCH rejects transitions on them with `Cannot schedule or publish an email via the update API. Use the publish API instead.` `terraform plan` against such an email shows editable-field updates but no state transition. To promote the email to the current shape:
+**Welcome email PATCH preserves flexAreas (v1.6.7 / v1.7.1).** Pre-v1.6.7 emails had a `update_data` block that dropped `content.flexAreas`, causing the email body to render empty after any `terraform apply`. From v1.6.7 the PATCH payload includes the full `flexAreas` envelope, so editable fields update in place without rebuilding the email body. `terraform plan` against an email last applied with the v1.6.7 fix shows just the field deltas; no taint required.
+
+The destroy + recreate path (taint) is the fallback only for the rare cases where the email's underlying state shape pre-dates the v1.6.7 fix and PATCH cannot recover it. To do that:
 
 ```bash
 # From the project root
 bash scripts/tf.sh taint module.landing_page.restapi_object.welcome_email
 npm run tf:plan    # confirms a CREATE action on the email resource
-npm run setup      # recreates with AUTOMATED_EMAIL / AUTOMATED / isPublished=true
+npm run setup      # recreates with the current shape
 ```
 
-`taint` marks the resource for destroy+recreate on the next apply. The resulting email has the correct `type` / `state` / `subcategory` / `isPublished` and matches what a fresh v1.6.0+ apply would produce. A workflow that was attached to the old email ID in HubSpot must be re-attached to the new email ID — workflow binding is manual and not managed by Terraform.
+A workflow that was attached to the old email ID in HubSpot must be re-attached to the new email ID — workflow binding is manual and not managed by Terraform. **Note (v1.8.1):** PATCH against a *published* email is rejected by the API regardless of payload shape; deferred fix is tracked in plan `2026-04-27-welcome-email-published-state-handling.md`.
 
 ## Hosting modes
 
@@ -120,7 +123,7 @@ The framework is pure plumbing — it sends whatever `DOMAIN` and `LANDING_SLUG`
 
 Switch modes by editing the project profile (`set-project-field.sh <account> <project> DOMAIN=... LANDING_SLUG=...`) and re-running `terraform apply`. No re-creation of resources needed — the pages' `domain` and `slug` fields update in place.
 
-`HOSTING_MODE_HINT` is an optional project-profile string. The framework itself ignores it; the skill (separate plan) reads it to pick mode-specific preflight checks and coaching.
+Hosting-mode hint is no longer a project-profile field — `HOSTING_MODE_HINT` was removed from `set-project-field.sh`'s allow-list in v1.7.0. The skill stores hosting mode in its own `<project>.skillstate.sh`; the framework infers nothing from it.
 
 ## Authentication
 
@@ -179,7 +182,9 @@ The skill (or human operator) uses these to create and update the operational fi
 **Credential safety:**
 
 - `accounts-init.sh` takes the Keychain *service name* as an argument and writes that reference into the config file. It never reads, writes, or otherwise touches the Keychain itself — adding the actual token is the user's manual step (`security add-generic-password …` or Keychain Access).
-- `set-project-field.sh` only accepts project-profile keys (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`, `LANDING_SLUG`, `THANKYOU_SLUG`, `HOSTING_MODE_HINT`, `HUBSPOT_SUBSCRIPTION_ID`, `HUBSPOT_OFFICE_LOCATION_ID`). Credential-reference fields (`HUBSPOT_TOKEN_KEYCHAIN_SERVICE`) are rejected with `SET_FIELD=error unknown-key <key>` — no file write happens in that case. The last two are account-level by convention but setting them at project level is a legitimate per-project override.
+- `set-project-field.sh` only accepts project-profile keys: `PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`, `LANDING_SLUG`, `THANKYOU_SLUG`, `HUBSPOT_SUBSCRIPTION_ID`, `HUBSPOT_OFFICE_LOCATION_ID`, `EMAIL_PREVIEW_TEXT`, `AUTO_PUBLISH_WELCOME_EMAIL`, `EMAIL_REPLY_TO`. Credential-reference fields (`HUBSPOT_TOKEN_KEYCHAIN_SERVICE`) and removed/skill-only keys (`HOSTING_MODE_HINT` since v1.7.0; `INCLUDE_BOTTOM_CTA` since v1.7.1) are rejected with `SET_FIELD=error unknown-key <key>` — no file write happens. Subscription/office-location are account-level by convention but setting them at project level is a legitimate per-project override.
+
+- Account/project arguments are validated against the shared `is_valid_name` regex (`^[a-z0-9][a-z0-9-]*$`) in `scripts/lib/validate-name.sh` (v1.8.1). This defeats path traversal (`..`), uppercase, dots, slashes, and control characters before any path is constructed. Applied uniformly across `accounts-init.sh`, `accounts-describe.sh`, `projects-list.sh`, `init-project-pointer.sh`, `scaffold-project.sh`, and `set-project-field.sh`.
 
 **Validation is up-front:** `set-project-field.sh` checks every `KEY=VALUE` pair before touching the file, so one bad pair in a batch rejects the whole batch and leaves the profile unchanged.
 
@@ -215,9 +220,12 @@ Three ways to read it:
 | `PREFLIGHT_PROJECT_PROFILE` | `ok` \| `missing` \| `incomplete` \| `skipped` | Same shape as `ACCOUNT_PROFILE` |
 | `PREFLIGHT_CREDENTIAL` | `found` \| `missing` \| `empty` \| `skipped` | `missing` includes the Keychain service name and the `security add-generic-password` command to add it |
 | `PREFLIGHT_API_ACCESS` | `ok` \| `unauthorized` \| `forbidden` \| `unreachable` \| `error` \| `skipped` | `unauthorized` = 401 (token invalid/expired); `forbidden` = 403; `unreachable` = curl failed to reach `api.hubapi.com`; `error` = unexpected HTTP |
-| `PREFLIGHT_SCOPES` | `ok` \| `missing` \| `error` \| `skipped` | `missing` is followed by a comma-list of missing scopes — the skill can name them directly |
+| `PREFLIGHT_TIER` | `<tier>` \| `unknown` \| `skipped` | One of `starter`, `pro`, `ent`, `ent+tx`, or `unknown`. Tier is inferred from a HubSpot-portal probe (subscription level) and feeds the SCOPES check. Added v1.7.0 |
+| `PREFLIGHT_SCOPES` | `ok` \| `missing` \| `error` \| `skipped` | `missing` is followed by a comma-list of missing scopes. Required-scope set varies by tier — Starter 7, Pro/Ent 8 (+`marketing-email`), Ent+TX 9 (+`transactional-email`); see `scripts/lib/tier-classify.sh` |
 | `PREFLIGHT_PROJECT_SOURCE` | `ok` \| `missing` \| `error` \| `skipped` | `missing` on 404 is **recoverable, non-blocking** — signals "first project on this account" |
 | `PREFLIGHT_DNS` | `ok` \| `missing` \| `skipped` | On `missing`, detail includes the expected CNAME target (`<portal-id>.group0.sites.hscoscdn-<region>.net`) so the user knows which record to create |
+| `PREFLIGHT_DOMAIN_CONNECTED` | `ok` \| `missing` \| `skipped` | Probes HubSpot's domain-connected status to distinguish system-domain hosting from custom-domain hosting. Added v1.7.0 |
+| `PREFLIGHT_EMAIL_DNS` | `ok` \| `warn` \| `missing` \| `skipped` | Probes SPF/DKIM/DMARC for the email-sending domain. Auth domain comes from `EMAIL_REPLY_TO` (the host part) when set, otherwise falls back to `DOMAIN`. Added v1.8.0 |
 | `PREFLIGHT_GA4` | `ok` \| `warn` | `warn` when `GA4_MEASUREMENT_ID` is empty (analytics won't fire, but build/deploy still works) |
 | `PREFLIGHT_FORM_IDS` | `ok` \| `warn` | `warn` when `CAPTURE_FORM_ID` is empty (expected before first deploy; populated by `post-apply`) |
 | `PREFLIGHT_TOOLS_OPTIONAL` | `ok` \| `warn` \| `skipped` | `warn` is followed by a comma-list of absent optional tools (`pandoc`, `pdftotext`, `git`). Non-blocking — these only affect specific skill workflows (source ingest, repo operations). `skipped` only when required tools are missing |
@@ -226,8 +234,12 @@ Credential safety: the HubSpot token is read into a local shell variable, used f
 
 ## Prerequisites
 
-- HubSpot Marketing Hub Starter + Content Hub Starter
-- Service Key with scopes: `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.schemas.contacts.write`, `crm.lists.read`, `crm.lists.write`, `forms`, `content` (7 scopes — `content` covers the marketing email resource via `/marketing/v3/emails`)
+- HubSpot Marketing Hub Starter (or Pro / Enterprise) + Content Hub Starter
+- Service Key with the scope set for your tier:
+  - **Starter (7 scopes):** `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.schemas.contacts.write`, `crm.lists.read`, `crm.lists.write`, `forms`, `content` — the `content` scope covers the marketing email resource via `/marketing/v3/emails`
+  - **Pro / Enterprise (8 scopes):** Starter set + `marketing-email` (publish path)
+  - **Enterprise + Transactional add-on (9 scopes):** Pro set + `transactional-email`
+  Tier-aware enforcement lives in `scripts/lib/tier-classify.sh`; `PREFLIGHT_TIER` reports detected tier and `PREFLIGHT_SCOPES` lists the missing scopes for that tier.
 - macOS with Keychain (for local development)
 
 ### CLI tools
@@ -239,3 +251,17 @@ On macOS (Homebrew):
 ```bash
 brew install curl jq terraform node pandoc poppler git   # poppler provides pdftotext; node ships npm
 ```
+
+## References
+
+Detailed HubSpot API quirks, HubL syntax, and email anatomy live alongside the framework rather than in this guide so they stay close to the code that exercises them. Index:
+
+| Document | Purpose |
+|---|---|
+| `references/email-anatomy.md` | Marketing email payload shape (DnD widgets, flexAreas, lifecycle states) |
+| `references/email-auth-dns.md` | SPF / DKIM / DMARC requirements probed by `PREFLIGHT_EMAIL_DNS` |
+| `references/forms-submissions-api.md` | Forms Submissions API (secure-submit) used by `survey-submit.js` on thank-you pages |
+| `references/hubl-cheatsheet.md` | HubL syntax notes for landing-page templates |
+| `references/hubspot-api-quirks.md` | Catalogued API quirks: payload shapes, required-but-undocumented fields, version-specific gotchas |
+
+Module code points back at these documents inline (search `references/` in `terraform/modules/`) so the rationale for each quirky payload shape is one click away.

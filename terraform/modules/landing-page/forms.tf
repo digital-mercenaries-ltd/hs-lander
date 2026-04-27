@@ -40,11 +40,10 @@
 
 locals {
   # Survey field rendering — switch on field.type.
-  # HubSpot Forms v3 quirks per type (verified against the v3 form-builder
-  # UI; live-portal probe should confirm before relying on these for
-  # high-stakes deploys):
+  # HubSpot Forms v3 quirks per type (verified post-v1.8.0 by Heard's
+  # live-portal deploy, which surfaced the original dropdown miss):
   # - single_line_text: just `fieldType = "single_line_text"`, no options
-  # - dropdown: `fieldType = "single_line_text"`, `options` populated
+  # - dropdown: `fieldType = "dropdown"` with options populated
   # - multiple_checkboxes: `fieldType = "multiple_checkboxes"` with options
   # - radio: `fieldType = "radio"` with options
   _survey_field_rendered = [
@@ -56,7 +55,7 @@ locals {
         required     = f.required
         fieldType = (
           f.type == "single_line_text" ? "single_line_text" :
-          f.type == "dropdown" ? "single_line_text" :
+          f.type == "dropdown" ? "dropdown" :
           f.type == "multiple_checkboxes" ? "multiple_checkboxes" :
           f.type == "radio" ? "radio" :
           "single_line_text"
@@ -203,6 +202,15 @@ resource "restapi_object" "survey_form" {
   path          = "/marketing/v3/forms"
   id_attribute  = "id"
   update_method = "PATCH"
+
+  # Survey field names match per-project CRM property names (the auto-added
+  # <slug>_survey_completed bool plus any consumer-declared custom_properties
+  # the survey writes into). Without this depends_on, Terraform parallelises
+  # form creation and property creation; the form 400s when the form refers
+  # to a property HubSpot doesn't see yet. Heard's v1.8.0 deploy hit this and
+  # worked around it with a two-pass apply — v1.8.1 closes that with the
+  # graph edge.
+  depends_on = [restapi_object.custom_property]
 
   data = jsonencode({
     name      = var.survey_form_name

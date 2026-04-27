@@ -40,6 +40,7 @@ export TF_VAR_hubspot_subscription_id="${HUBSPOT_SUBSCRIPTION_ID:-}"
 export TF_VAR_hubspot_office_location_id="${HUBSPOT_OFFICE_LOCATION_ID:-}"
 export TF_VAR_email_preview_text="${EMAIL_PREVIEW_TEXT:-}"
 export TF_VAR_auto_publish_welcome_email="${AUTO_PUBLISH_WELCOME_EMAIL:-true}"
+export TF_VAR_email_reply_to="${EMAIL_REPLY_TO:-}"
 
 # Run terraform
 exec terraform -chdir="$PROJECT_DIR/terraform" "$@"

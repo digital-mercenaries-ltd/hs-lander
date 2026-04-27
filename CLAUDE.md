@@ -12,15 +12,21 @@ hs-lander — a reusable HubSpot landing page framework. Terraform modules, buil
 
 Current version: see `VERSION` (framework SSoT). `preflight.sh` emits it as `PREFLIGHT_FRAMEWORK_VERSION=<value>` so the skill can check compatibility. Bump `VERSION` in any PR that changes the skill-facing contract; cut a matching `v<VERSION>` tag on merge.
 
-v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, three local test suites (39 assertions, all passing), and CI workflows are in place.
+v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, the local test suite (550+ assertions across 12 test scripts), and CI workflows are in place.
 
-**Shipped:**
-- PR #1 merged to `main` (2026-04-14) — v1.0.0 framework
-- PR #2 merged (2026-04-21) — post-v1.0.0 doc cleanup, roadmap, org/project-agnosticism enforcement
-- PR #3 merged (2026-04-21) — account/project config hierarchy, two-tier `~/.config/hs-lander/<account>/` config, `preflight.sh` validator, PAK path removed
+**Shipped (latest first):**
+- v1.8.1 (2026-04-27) — review-and-deploy defects + documentation re-sync (12 fixes from codex review, architectural review, and Heard v1.8.0 deploy)
+- v1.8.0 — survey schema, email DNS preflight, capture redirect, survey-submit.js
+- v1.7.1 — test-trap, include_bottom_cta removal, migration correction, project-script refresh
+- v1.7.0 — HubL scaffold, dark-mode CSS, email anatomy, tier-aware preflight
+- v1.6.x series — landing-page apply drift, provider bump, forms privacy text, field-group cap, email publish + upload endpoint, multipart upload, email rendering + form-field hide
+- v1.5.0 — hosting modes + landing slug
+- v1.4.0 — API drift fixes (forms + email)
+- v1.3.x — preflight, scaffold, config-mutation commands
+- v1.0.0–v1.2.x — initial framework, two-tier config hierarchy, account-aware preflight
 
 **In flight (elsewhere):**
-- Session 3: `hs-lander` skill in `~/DocsLocal/skills/` — drafted, under review iterations. Framework-compatibility feedback from that session has been flowing back to this repo (PR #4 is the current example).
+- `hs-lander` skill in `~/DocsLocal/skills/` — iterating; framework-compatibility feedback flows back to this repo (cf. v1.7.0/v1.8.0/v1.8.1).
 
 **Next:**
 - End-to-end deployment testing is done manually per-project at this stage; an automated skill-driven e2e test is a roadmap item (v2.2). Original smoke workflow archived at `docs/archive/workflows/smoke.yml`.
@@ -85,15 +91,19 @@ hs-lander/
 │   ├── account-setup/       ← Run once per HubSpot account (shared resources)
 │   └── landing-page/        ← Run per project (forms, pages, email, list)
 ├── scripts/                 ← Generic, config-driven shell scripts
+│   ├── lib/
+│   │   ├── tier-classify.sh     ← Tier → required-scope mapping (Starter/Pro/Ent/Ent+TX)
+│   │   └── validate-name.sh     ← Shared `is_valid_name` regex used by config-touching scripts
 │   ├── build.sh             ← src/ → dist/ with token substitution
 │   ├── deploy.sh            ← build + upload to HubSpot Design Manager
 │   ├── upload.sh            ← PUT files to CMS Source Code API (no CLI needed)
 │   ├── watch.sh             ← build + poll for changes
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
-│   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering config, credential, API, scopes, DNS
+│   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering tools, config, credential, API, scopes, DNS, email DNS
 │   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
 │   ├── hs-curl.sh           ← Keychain → curl HubSpot API
 │   ├── version.sh               ← FRAMEWORK_VERSION=<value> from ../VERSION
+│   ├── upgrade-project-scripts.sh ← Refresh a project's scripts/ from a newer framework install (v1.7.1)
 │   ├── accounts-list.sh         ← ACCOUNTS=<csv> of configured accounts (pre-scaffold)
 │   ├── accounts-describe.sh     ← ACCOUNT_* fields for a given account (pre-scaffold)
 │   ├── accounts-init.sh         ← Create a new account profile from args (config mutation)
@@ -147,7 +157,7 @@ An end-to-end deployment workflow (`smoke.yml`) was drafted during v1.0.0 but ar
 **Config-mutation commands** (skill-driven writes to operational files, so the skill itself owns zero `Write`/`Edit` calls on `~/.config/hs-lander/`):
 
 - `accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service>` → `ACCOUNTS_INIT=created|conflict|error <detail>`. Validates account name and region; writes atomically; refuses to overwrite an existing profile. Never touches the Keychain.
-- `set-project-field.sh <account> <project> KEY=VALUE [KEY=VALUE ...]` → one `SET_FIELD_UPDATED=<key>` or `SET_FIELD_APPENDED=<key>` per pair, ending with `SET_FIELD=ok`. Allowed keys are the project-profile schema only (`PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`). Unknown keys — including `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` — are rejected up-front with no file write.
+- `set-project-field.sh <account> <project> KEY=VALUE [KEY=VALUE ...]` → one `SET_FIELD_UPDATED=<key>` or `SET_FIELD_APPENDED=<key>` per pair, ending with `SET_FIELD=ok`. Allowed keys (project-profile schema): `PROJECT_SLUG`, `DOMAIN`, `DM_UPLOAD_PATH`, `GA4_MEASUREMENT_ID`, `CAPTURE_FORM_ID`, `SURVEY_FORM_ID`, `LIST_ID`, `LANDING_SLUG`, `THANKYOU_SLUG`, `HUBSPOT_SUBSCRIPTION_ID`, `HUBSPOT_OFFICE_LOCATION_ID`, `EMAIL_PREVIEW_TEXT`, `AUTO_PUBLISH_WELCOME_EMAIL`, `EMAIL_REPLY_TO`. Unknown keys — including `HUBSPOT_TOKEN_KEYCHAIN_SERVICE` and (since v1.7.0) `HOSTING_MODE_HINT` — are rejected up-front with no file write. The shared `is_valid_name` regex rejects account/project arguments containing `..`, slashes, uppercase, etc.
 
 All pre-scaffold and config-mutation commands respect `HS_LANDER_CONFIG_DIR` (default `~/.config/hs-lander`) and `HS_LANDER_PROJECT_DIR` (default `$PWD`) for testability.
 
@@ -157,26 +167,25 @@ All pre-scaffold and config-mutation commands respect `HS_LANDER_CONFIG_DIR` (de
 
 ## Key design decisions
 
-- **Terraform provider:** Mastercard/restapi ~1.19 (generic REST, not HubSpot-specific). All resources use `update_method = "PATCH"`.
+- **Terraform provider:** Mastercard/restapi `~> 2.0` (generic REST, not HubSpot-specific; bumped from `~> 1.19` in v1.6.1). All resources use `update_method = "PATCH"`.
 - **Auth:** Service Keys preferred (one credential per account). Scripts read from macOS Keychain via `security find-generic-password`. No credentials on disk.
 - **CLI elimination:** `upload.sh` uses CMS Source Code API directly — no HubSpot CLI or PAK needed.
 - **Modules inherit provider:** Root `main.tf` configures the `restapi` provider. Modules inherit it.
 - **Per-project Terraform state:** Each project has its own state. Isolated blast radius.
-- **Contact segmentation:** `project_source` CRM property (hidden form field) + per-project dynamic lists, both managed by Terraform.
+- **Contact segmentation:** `project_source` CRM property hidden via Forms API `hidden = true` flag (canonical since v1.6.7); CSS selectors are belt-and-braces. Per-project dynamic lists, both managed by Terraform.
+- **Tier-aware preflight (v1.7.0):** required scope set varies by HubSpot tier — Starter 7, Pro/Ent 8 (+`marketing-email`), Ent+TX 9 (+`transactional-email`). See `scripts/lib/tier-classify.sh`.
 
-## HubSpot API quirks (critical for Terraform modules)
+## HubSpot API quirks (load-bearing only)
 
-- Forms API v3: root requires `createdAt` (any ISO-8601, server overwrites)
-- Email fields: require `validation.createdAt` + `validation.configuration.createdAt`
-- Non-email fields: must NOT have `validation` key
-- `legalConsentOptions.type` = `"implicit_consent_to_process"` (lowercase)
-- Every field needs `objectTypeId = "0-1"`
-- Lists API v3 wraps in `{"list":{...}}` which breaks restapi provider
-- `templateType: page` is the only valid annotation for DM templates
-- Landing-page type is set by the API endpoint, not the template
-- Asset paths must use `{{ get_asset_url() }}` in HubL templates
-- EU1 forms: `//js-eu1.hsforms.net/forms/embed/v2.js` + `region: 'eu1'`
-- NA1 forms: `//js.hsforms.net/forms/embed/v2.js` (no region property)
+The full quirks catalogue lives in `references/hubspot-api-quirks.md`. The shortlist below is the load-bearing set that recurs in module code:
+
+- Forms v3 fieldType vocabulary is closed: `single_line_text`, `dropdown`, `multiple_checkboxes`, `radio`, `email`, etc. Treating `dropdown` as a `single_line_text` (the v1.8.0 miss) is rejected.
+- Forms v3 fieldGroup is capped at 3 fields — `chunklist(..., 3)` is the only safe way to assemble groups.
+- `hidden = true` is the canonical hide mechanism on Forms v3 (since v1.6.7); `fieldType = "hidden"` is rejected.
+- CRM properties: `bool` requires the canonical True/False `options` array (v1.8.1); `enumeration` requires populated options; `string`/`number` must NOT carry the `options` key.
+- Marketing emails (v1.5.0+): create as `state = "AUTOMATED_DRAFT"` then publish via local-exec; PATCH against published state is rejected (deferred fix — see plan `2026-04-27-welcome-email-published-state-handling.md`).
+- Lists v3 wraps responses in `{"list":{...}}` which breaks the restapi provider's id_attribute path — use `id_attribute = "list/listId"`.
+- EU1 forms embed: `//js-eu1.hsforms.net/forms/embed/v2.js` + `region: 'eu1'`. NA1: no region property.
 
 ## Build tokens
 
@@ -190,6 +199,7 @@ All pre-scaffold and config-mutation commands respect `HS_LANDER_CONFIG_DIR` (de
 | `__DOMAIN__` | `DOMAIN` | |
 | `__GA4_ID__` | `GA4_MEASUREMENT_ID` | |
 | `__DM_PATH__` | `DM_UPLOAD_PATH` | |
+| `__PROJECT_SLUG__` | `PROJECT_SLUG` | Used by survey-submit.js for `<slug>_survey_completed` (v1.8.0) |
 
 ## Credential rules
 

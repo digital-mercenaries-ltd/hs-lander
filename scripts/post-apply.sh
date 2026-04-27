@@ -21,10 +21,11 @@ source "$PROJECT_DIR/project.config.sh"
 : "${HS_LANDER_ACCOUNT:?HS_LANDER_ACCOUNT must be set in project.config.sh}"
 : "${HS_LANDER_PROJECT:?HS_LANDER_PROJECT must be set in project.config.sh}"
 
-CONFIG_FILE="${HOME}/.config/hs-lander/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+CONFIG_DIR="${HS_LANDER_CONFIG_DIR:-$HOME/.config/hs-lander}"
+CONFIG_FILE="${CONFIG_DIR}/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "ERROR: Project config file not found: $CONFIG_FILE" >&2
-  echo "Expected at ~/.config/hs-lander/<account>/<project>.sh per the two-tier config layout." >&2
+  echo "Expected at \$HS_LANDER_CONFIG_DIR/<account>/<project>.sh (default ~/.config/hs-lander/) per the two-tier config layout." >&2
   exit 1
 fi
 
@@ -37,15 +38,28 @@ _sed_inplace() {
   fi
 }
 
+# Update an existing assignment line in $file, or append a new one if no
+# matching key is present. A hand-edited profile that has had a line removed
+# (e.g. SURVEY_FORM_ID dropped because the project doesn't use a survey)
+# would otherwise silently fail to record the value.
+_update_field() {
+  local key="$1" value="$2" file="$3"
+  if grep -q "^${key}=" "$file"; then
+    _sed_inplace "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+  else
+    printf '%s="%s"\n' "$key" "$value" >> "$file"
+  fi
+}
+
 # Read outputs from terraform
 capture_form_id=$(terraform -chdir="$TF_DIR" output -raw capture_form_id 2>/dev/null || echo "")
 survey_form_id=$(terraform -chdir="$TF_DIR" output -raw survey_form_id 2>/dev/null || echo "")
 list_id=$(terraform -chdir="$TF_DIR" output -raw list_id 2>/dev/null || echo "")
 
-# Update project config file (in ~/.config/hs-lander/, not the project dir)
-_sed_inplace "s|^CAPTURE_FORM_ID=.*|CAPTURE_FORM_ID=\"${capture_form_id}\"|" "$CONFIG_FILE"
-_sed_inplace "s|^SURVEY_FORM_ID=.*|SURVEY_FORM_ID=\"${survey_form_id}\"|" "$CONFIG_FILE"
-_sed_inplace "s|^LIST_ID=.*|LIST_ID=\"${list_id}\"|" "$CONFIG_FILE"
+# Update project config file (in $HS_LANDER_CONFIG_DIR, not the project dir)
+_update_field "CAPTURE_FORM_ID" "$capture_form_id" "$CONFIG_FILE"
+_update_field "SURVEY_FORM_ID" "$survey_form_id" "$CONFIG_FILE"
+_update_field "LIST_ID" "$list_id" "$CONFIG_FILE"
 
 echo "Config updated: $CONFIG_FILE"
 echo "  CAPTURE_FORM_ID=$capture_form_id"

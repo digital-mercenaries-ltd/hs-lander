@@ -56,12 +56,34 @@ variable "hubspot_office_location_id" {
   type = string
 }
 
+# Email reply-to address for the welcome email (e.g. hello@mail.example.com).
+# Used for both the rendered email's reply-to header and (via the project
+# profile's EMAIL_REPLY_TO) the PREFLIGHT_EMAIL_DNS auth-domain probe.
+variable "email_reply_to" {
+  type = string
+}
+
+variable "email_preview_text" {
+  type    = string
+  default = ""
+}
+
+variable "auto_publish_welcome_email" {
+  type    = bool
+  default = true
+}
+
+variable "capture_post_submit_action_override" {
+  type    = any
+  default = {}
+}
+
 module "account_setup" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.6.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.8.1"
 }
 
 module "landing_page" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.6.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.8.1"
 
   hubspot_portal_id          = var.hubspot_portal_id
   project_slug               = "PROJECT_SLUG"
@@ -76,7 +98,7 @@ module "landing_page" {
   email_name             = "PROJECT — Welcome"
   email_subject          = "Welcome"
   email_from_name        = "PROJECT"
-  email_reply_to         = "PROJECT@example.com"
+  email_reply_to         = var.email_reply_to
   email_body_html        = file("${path.module}/../dist/emails/welcome-body.html")
   page_landing_name      = "PROJECT — Landing Page"
   page_landing_title     = "PROJECT"
@@ -84,6 +106,10 @@ module "landing_page" {
   page_thankyou_title    = "Thank You | PROJECT"
   template_path_landing  = "PROJECT_SLUG/templates/landing-page.html"
   template_path_thankyou = "PROJECT_SLUG/templates/thank-you.html"
+
+  email_preview_text                  = var.email_preview_text
+  auto_publish_welcome_email          = var.auto_publish_welcome_email
+  capture_post_submit_action_override = var.capture_post_submit_action_override
 
   hubspot_subscription_id    = var.hubspot_subscription_id
   hubspot_office_location_id = var.hubspot_office_location_id
