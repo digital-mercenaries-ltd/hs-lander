@@ -30,6 +30,7 @@ PREFLIGHT_CONTRACT_KEYS=(
   PREFLIGHT_PROJECT_SOURCE
   PREFLIGHT_DNS
   PREFLIGHT_DOMAIN_CONNECTED
+  PREFLIGHT_EMAIL_DNS
   PREFLIGHT_GA4
   PREFLIGHT_FORM_IDS
   PREFLIGHT_TOOLS_OPTIONAL
@@ -241,13 +242,50 @@ exit 0
 MOCK
   chmod +x "$dir/mock-bin/curl"
 
-  # Mock `dig`: echo a fake IP by default; empty if MOCK_DIG_EMPTY is set.
+  # Mock `dig`: handles +short queries for A (default), TXT, and CNAME.
+  # MOCK_DIG_EMPTY makes A queries return empty. Email-DNS scenarios
+  # override TXT/CNAME outputs via dedicated env vars.
   cat > "$dir/mock-bin/dig" <<'MOCK'
 #!/usr/bin/env bash
-if [[ -n "${MOCK_DIG_EMPTY:-}" ]]; then
-  exit 0
-fi
-echo "93.184.216.34"
+qtype=""
+qname=""
+for arg in "$@"; do
+  case "$arg" in
+    +short|+*) ;;
+    A|TXT|CNAME|MX|SOA|ANY) qtype="$arg" ;;
+    *) qname="$arg" ;;
+  esac
+done
+qtype="${qtype:-A}"
+
+case "$qtype" in
+  A)
+    if [[ -n "${MOCK_DIG_EMPTY:-}" ]]; then
+      exit 0
+    fi
+    echo "93.184.216.34"
+    ;;
+  TXT)
+    case "$qname" in
+      _dmarc.*)
+        printf '%s\n' "${MOCK_DIG_DMARC_TXT:-\"v=DMARC1; p=none; rua=mailto:dmarc@example.com\"}"
+        ;;
+      *)
+        # Default SPF includes the EU1 portal-specific include with the
+        # mock portal id 12345678 and a trailing -all so the v1.8.0
+        # "ok" path passes by default. Override per scenario.
+        printf '%s\n' "${MOCK_DIG_SPF_TXT:-\"v=spf1 include:12345678.spf04.hubspotemail.net -all\"}"
+        ;;
+    esac
+    ;;
+  CNAME)
+    case "$qname" in
+      hs1-*._domainkey.*) printf '%s\n' "${MOCK_DIG_DKIM_HS1:-hs1-12345678.example.com.cf-dns.net.}" ;;
+      hs2-*._domainkey.*) printf '%s\n' "${MOCK_DIG_DKIM_HS2:-hs2-12345678.example.com.cf-dns.net.}" ;;
+      *) ;;
+    esac
+    ;;
+esac
 exit 0
 MOCK
   chmod +x "$dir/mock-bin/dig"
@@ -713,7 +751,7 @@ assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools
 assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
 assert_full_contract "$LOGO" "Scenario O"
 preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
-assert_equal "$preflight_line_count" "15" "exactly 15 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 14)"
+assert_equal "$preflight_line_count" "16" "exactly 16 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 15)"
 
 # --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
 # Two tools missing: csv list in the detail.
@@ -778,7 +816,7 @@ write_project_sourcing_chain "$TMPR"
 write_mock_bin "$TMPR"
 LOGR="$TMPR/preflight.log"
 run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
-expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 

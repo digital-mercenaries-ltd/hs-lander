@@ -2,17 +2,21 @@
 # tier-classify.sh — classify a HubSpot portal's tier from
 # /account-info/v3/details JSON. Sourced by preflight.sh.
 #
-# TODO (verify across portals): the accountType → tier-label mapping below
-# is informed-guess. v1.7.0 ships with these defaults; an adopter who probes
-# real portals at each tier should update this table to match observed
-# values. See docs/superpowers/plans/2026-04-26-v1.7.0-... Prerequisite A.
+# Verification status of the accountType → tier-label mapping below:
 #
-# Probable values (confirm and patch as portals are sampled):
-#   "STANDARD"     → starter
-#   "PROFESSIONAL" → pro
-#   "ENTERPRISE"   → ent
-#   anything else  → unknown (preflight emits unknown; consumer treats
-#                   conservatively, default to pro scope set)
+#   "STANDARD" / "STARTER" → starter   — VERIFIED 2026-04-26 against a real
+#                                        Starter portal during the v1.7.0 deploy
+#                                        round (downstream consumer's portal;
+#                                        portal ID intentionally not recorded).
+#   "PROFESSIONAL"         → pro       — INFORMED-GUESS pending Pro portal access
+#   "ENTERPRISE"           → ent       — INFORMED-GUESS pending Ent portal access
+#   anything else          → unknown   — preflight emits unknown; consumer treats
+#                                        conservatively, default to pro scope set
+#
+# A consumer who probes real Pro / Ent portals should update the matching
+# rows here and ship as a patch. See docs/superpowers/plans/2026-04-26-v1.7.0-
+# scaffold-hubl-and-tier-aware-preflight.md Prerequisite A for the probe
+# command (`bash $FRAMEWORK_HOME/scripts/hs-curl.sh GET '/account-info/v3/details'`).
 #
 # Output labels (used by preflight.sh):
 #   starter | pro | ent | ent+tx | unknown

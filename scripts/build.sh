@@ -29,7 +29,10 @@ _sed_inplace() {
   fi
 }
 
-# Token substitution (use | delimiter — DM_UPLOAD_PATH contains /)
+# Token substitution (use | delimiter — DM_UPLOAD_PATH contains /).
+# v1.8.0 added __PROJECT_SLUG__ for survey-submit.js's survey_completed
+# property name. __SURVEY_FORM_ID__ has been substituted since v1.0.0;
+# kept here so it's adjacent to its sibling tokens.
 find "$PROJECT_DIR/dist" -type f | while read -r file; do
   _sed_inplace \
     -e "s|__PORTAL_ID__|${HUBSPOT_PORTAL_ID}|g" \
@@ -40,6 +43,7 @@ find "$PROJECT_DIR/dist" -type f | while read -r file; do
     -e "s|__DOMAIN__|${DOMAIN}|g" \
     -e "s|__GA4_ID__|${GA4_MEASUREMENT_ID}|g" \
     -e "s|__DM_PATH__|${DM_UPLOAD_PATH}|g" \
+    -e "s|__PROJECT_SLUG__|${PROJECT_SLUG:-}|g" \
     "$file"
 done
 

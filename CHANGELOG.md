@@ -1,5 +1,77 @@
 # Changelog
 
+## v1.8.0 (2026-04-27)
+
+Minor release. Survey-funnel completeness (typed survey fields, enumeration-backed CRM properties, working static survey form via Forms Submissions API, capture redirect with email handoff, survey-completion flag, phantom-form documentation) plus email-deliverability preflight (`PREFLIGHT_EMAIL_DNS`). Module input contract changes are additive — existing v1.7.1 projects with `survey_fields = [{type = "single_line_text", ...}]` continue to work without modification. The capture form's default `postSubmitAction` changes from inline thank-you to redirect-with-email, which is the one breaking-ish change; consumers can preserve old behaviour via the new `capture_post_submit_action_override` variable.
+
+### Added
+
+- **`survey_fields[]` field-type extensions.** New types: `dropdown`, `multiple_checkboxes`, `radio` (in addition to the existing `single_line_text`). Each non-text type requires `options = ["A", "B", ...]`. New optional `other_overflow` boolean per field — when true on a non-text field with an "Other" option, the framework auto-emits a sibling `<field.name>_other` (text) HubSpot form field plus a matching CRM string property to capture the free-text typed when the user picks "Other". Validation blocks on the variable enforce options-required and known-type constraints at plan time.
+- **`custom_properties[]` type extensions.** New types: `enumeration`, `bool`, `number` (in addition to the existing `string`). `fieldType` becomes optional and defaults from `type` (string→text, enumeration→select, bool→booleancheckbox, number→number). Enumerations require `options = ["A", "B", ...]`. The skill should generate enumeration `custom_properties` in lockstep with matching survey field options so submitted dropdown values land in constrained CRM properties cleanly.
+- **`<project_slug>_survey_completed` boolean property** auto-added when `var.include_survey = true`. `scaffold/src/js/survey-submit.js` flips it to `true` on successful survey submission, enabling segmentation between contacts who completed vs. skipped the survey.
+- **`scaffold/src/js/survey-submit.js`** (new). Picks the email from URL parameter (`?email=...`), reveals/hides "Other" overflow text inputs as the paired primary field's value changes, collects all field values (semicolon-joined for multi-checkbox; sibling `<field>_other` only when the primary is "Other"), and POSTs to HubSpot's Forms Submissions API at `api.hsforms.com/submissions/v3/integration/secure/submit/<portal>/<form-id>`. New build tokens: `__PROJECT_SLUG__` (used for the survey_completed property name) added to `scripts/build.sh` substitution patterns. `scaffold/src/templates/thank-you.html` wires `data-survey-form` and the script tag.
+- **`capture_post_submit_action_override` module variable.** Empty object (default) uses the new redirect-with-email default; pass `{type = "thank_you", value = "..."}` to keep the v1.7.x inline-thank-you behaviour or `{type = "redirect_url", value = "..."}` to redirect to a custom URL.
+- **`PREFLIGHT_EMAIL_DNS`** in `scripts/preflight.sh`. Probes the email-auth domain (`EMAIL_REPLY_TO`'s host, falling back to `DOMAIN`) for SPF (HubSpot include + correct `all` mechanism order), DKIM (typed CNAME query against `hs1-<portal-id>._domainkey.<domain>` and `hs2-<portal-id>._domainkey.<domain>`), and DMARC (warn-only). Emits one of: `ok | spf-missing | spf-no-hubspot-include | spf-all-mid-record | dkim-missing | dmarc-missing | region-unknown | skipped`. Preflight contract bumped to 16 `PREFLIGHT_*` lines (FRAMEWORK_VERSION + 15).
+- **`tests/test-deployment.sh` schema-alignment check.** Three-way diff: static thank-you survey form `<input name="...">` attributes ↔ HubSpot survey form field names ↔ `custom_properties` names. Catches the failure mode where every individual layer passes its own checks but the layers have drifted out of alignment, so submissions silently land in the wrong (or no) CRM property. Skipped when `INCLUDE_SURVEY=false`.
+- **Two new reference docs.** `references/forms-submissions-api.md` documents the embedded-form vs. static-form-plus-Submissions-API split and explains why the survey form uses the latter. `references/email-auth-dns.md` documents the SPF / DKIM / DMARC requirements with the regional-includes table preflight consults.
+
+### Changed
+
+- **Capture form `postSubmitAction` default.** v1.7.x consumers who don't set an override see their capture form switch from inline thank-you snippet to redirect-with-email on next apply. The redirect URL is `https://${var.domain}/${var.thankyou_slug}?email={{email}}`. Set `capture_post_submit_action_override` to preserve old behaviour.
+- **`survey_form` header comment** in `forms.tf` documents the Path B contract: the HubSpot-defined survey form is the submission target only, not rendered as an embed; field names must match the static thank-you form's `<input name="...">` attributes.
+- **`scripts/lib/tier-classify.sh` Starter row marked verified.** Pro and Ent rows remain informed-guess pending portal access at those tiers.
+- **`hubspot-api-quirks.md`** updated with new findings: DKIM selector pattern, SPF mechanism-order rule, capture-form merge-token syntax (TODO until verified), Forms Submissions secure-submit endpoint origin allowlist behaviour.
+
+### Migration
+
+`survey_fields[]` and `custom_properties[]` extensions are additive — existing single-text fields work unchanged.
+
+The capture form `postSubmitAction` default change is the one near-breaking behaviour change. To preserve v1.7.x inline-thank-you behaviour:
+
+```hcl
+module "landing_page" {
+  capture_post_submit_action_override = {
+    type  = "thank_you"
+    value = "Thanks for submitting the form."
+  }
+}
+```
+
+Otherwise, plan against v1.8.0 will show an in-place UPDATE to `capture_form` switching the action to redirect.
+
+To upgrade an existing project:
+
+```bash
+bash $FRAMEWORK_HOME/scripts/upgrade-project-scripts.sh   # refresh project-local scripts
+# bump ?ref=v1.7.1 → ?ref=v1.8.0 in terraform/main.tf
+bash scripts/tf.sh init -upgrade
+bash scripts/tf.sh plan
+# inspect: capture_form will show postSubmitAction in-place UPDATE.
+# If you want the old inline behaviour, set the override before applying.
+bash scripts/tf.sh apply
+```
+
+For projects with `include_survey = true`:
+
+```bash
+# After v1.8.0 apply, copy the new survey-submit.js into your project
+cp $FRAMEWORK_HOME/scaffold/src/js/survey-submit.js src/js/
+# Update src/templates/thank-you.html: add data-survey-form to the survey
+# <form>, add the <script src=".../survey-submit.js" defer> tag before
+# {{ standard_footer_includes }}, and align <input name="..."> attributes
+# with your survey_fields declarations.
+npm run build
+npm run deploy
+```
+
+The `<project_slug>_survey_completed` CRM property is auto-created on apply; nothing to do consumer-side.
+
+**Empirical caveats.** Two prerequisites ship with informed-guess defaults pending real-portal verification:
+- Capture form `redirect_url` merge-token syntax (`{{email}}` is the most-documented; alternates include `{{form_field.email}}`, `{{contact.email}}`, `{email}`).
+- HubSpot Forms v3 field-shape details for `dropdown` / `multiple_checkboxes` / `radio` (the framework ships `fieldType` mappings that follow Forms v3 docs; verify against a portal-saved form if behaviour differs).
+
+Plus the NA1 SPF include hostname in `references/email-auth-dns.md` is a placeholder pending NA1 portal access. EU1 is verified.
+
 ## v1.7.1 (2026-04-27)
 
 Patch — four surgical fixes surfaced by the v1.7.0 deploy round. Test EXIT trap repair, removal of an advisory-only module variable that was misleading consumers, correction of v1.6.7's migration note, and a sanctioned helper for refreshing project-local scripts (R9). Non-breaking; `terraform plan` against v1.7.1 shows zero changes for a v1.7.0 project.
