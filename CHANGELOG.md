@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.9.0 (2026-04-27) — Component 1: safety pair
+
+Minor release. First component of the v1.9.0 master plan: pre-apply plan-review gate plus timestamped backups for state and project profiles. Together they close the "skill loop could destroy or duplicate resources" exposure that auto-approve apply has carried since v1.0.0.
+
+### Added
+
+- **`scripts/plan-review.sh`** — runs `terraform plan -out=<file>`, parses the JSON via `jq`, emits a stable-order contract: `PLAN_CREATE`, `PLAN_UPDATE`, `PLAN_DELETE`, `PLAN_REPLACE`, `PLAN_RESOURCES` (JSON), `PLAN_FILE`, `PLAN_REVIEW=ok|confirm`, and (when `confirm`) `PLAN_REVIEW_SEVERITY=info|caution|destructive`. Thresholds: 50 creates (`HS_LANDER_MAX_CREATE`), 100 updates (`HS_LANDER_MAX_UPDATE`), 0 destroys, 0 replaces. Highest severity wins. Gate is advisory — exit 0 always when the plan succeeds.
+- **`scripts/backup-file.sh`** — generic timestamped-backup helper with LRU retention. Default keep is 20; override via `HS_LANDER_BACKUP_KEEP`. Emits `BACKUP=skip|ok|error <detail>`.
+- **`tf.sh apply` verb** — requires a saved plan file; refuses with `APPLY=error plan-file-missing` otherwise. Always backs up `terraform/terraform.tfstate` to `terraform/state-backups/` before apply (including under the escape hatch). Deletes the plan file on success. Escape hatch: `HS_LANDER_UNSAFE_APPLY=1` runs plain `terraform apply -auto-approve` with a noisy warning. Other verbs (`init`, `plan`, `destroy`) unchanged.
+- **`post-apply.sh` profile backup** — pre-mutation copy of `~/.config/hs-lander/<account>/<project>.sh` to `.profile-backups/` (dot-prefixed so `projects-list.sh`'s `*.sh` glob ignores it).
+- **Scaffold updates** — `package.json` now exposes `npm run plan` and `npm run apply`; `npm run setup` chains `build → plan-review → apply`. `.gitignore` ignores `terraform/state-backups/` and `.hs-lander-plan.bin`.
+- **Tests** — new `tests/test-plan-review.sh` (20 assertions, null_resource fixtures), new `tests/test-backup-file.sh` (14 assertions), new `tests/test-tf.sh` (13 assertions for the `apply` verb). `tests/test-post-apply.sh` and `tests/test-projects-list.sh` extended for backup behaviour and `.profile-backups/` regression.
+- **`docs/framework.md`** — new "Plan review" and "Backups and recovery" sections covering contract, thresholds, override env vars, restore procedure, sync-service exposure note, and the long-term direction toward a remote Terraform backend.
+
+### New emit prefixes
+
+`PLAN_REVIEW`, `PLAN_REVIEW_SEVERITY`, `PLAN_*` (CREATE/UPDATE/DELETE/REPLACE/RESOURCES/FILE), `APPLY`, `BACKUP`. Tracked under R20 (interface normalisation, deferred to v2.0); shipped verbatim per the component plans for now.
+
+### Migration
+
+`npm run setup` is no longer an auto-approve apply. Existing projects upgrading via `upgrade-project-scripts.sh` should re-pin `?ref=v1.9.0` in `terraform/main.tf` and refresh `package.json` from the scaffold. Direct CLI users on `confirm` plans should split into `npm run plan` + `npm run apply`.
+
+### Cross-references
+
+- Master plan: `docs/superpowers/plans/2026-04-22-v1.9.0-master-plan.md` (PR #25 / commit `cd430e4`).
+- Component plans: `docs/superpowers/plans/2026-04-22-plan-review-gate.md`, `docs/superpowers/plans/2026-04-22-backup-state-and-profiles.md`.
+
 ## v1.8.1 (2026-04-27)
 
 Patch release. Twelve surgical fixes from three independent reviews of v1.8.0 (codex code review, architectural review, Heard v1.8.0 deploy session) plus a documentation re-sync. No module input contract changes; no behaviour changes from the consumer's perspective beyond closing the dead-code paths and Starter-blocking defects the reviews surfaced. Existing v1.8.0 state plans clean.

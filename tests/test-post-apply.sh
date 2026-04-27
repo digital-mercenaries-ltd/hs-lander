@@ -27,6 +27,8 @@ mkdir -p \
 cp "$REPO_DIR/scripts/post-apply.sh" "$TMPDIR/project/scripts/post-apply.sh"
 # post-apply sources lib/sed-portable.sh
 cp "$REPO_DIR/scripts/lib/sed-portable.sh" "$TMPDIR/project/scripts/lib/sed-portable.sh"
+# v1.9.0 — post-apply now invokes backup-file.sh for the profile
+cp "$REPO_DIR/scripts/backup-file.sh" "$TMPDIR/project/scripts/backup-file.sh"
 
 # Account config (unchanged by post-apply)
 cat > "$TMPDIR/home/.config/hs-lander/testacct/config.sh" <<'EOF'
@@ -115,5 +117,31 @@ assert_file_contains "$PROJECT_FILE" 'LIST_ID="mock-list-id-789"' "LIST_ID same 
 # Count lines to ensure no duplication — project file should stay at 7 lines
 line_count=$(wc -l < "$PROJECT_FILE" | tr -d ' ')
 assert_equal "$line_count" "7" "project config still has 7 lines (no duplication)"
+
+echo ""
+echo "--- v1.9.0: profile backup written before mutation ---"
+PROFILE_BACKUP_DIR="$TMPDIR/home/.config/hs-lander/testacct/.profile-backups"
+assert_dir_exists "$PROFILE_BACKUP_DIR" ".profile-backups directory created"
+backup_count=$(find "$PROFILE_BACKUP_DIR" -name 'testproj.sh.*' -type f | wc -l | tr -d ' ')
+# Two runs above → two backups (LRU keep default 20).
+assert_equal "$backup_count" "2" "two backups present after two post-apply runs"
+# First backup must contain pre-mutation state (CAPTURE_FORM_ID="")
+oldest_backup=$(find "$PROFILE_BACKUP_DIR" -name 'testproj.sh.*' -type f | sort | head -1)
+assert_file_contains "$oldest_backup" 'CAPTURE_FORM_ID=""' "earliest backup is the pre-mutation profile"
+
+echo ""
+echo "--- v1.9.0: profile backup LRU honours HS_LANDER_BACKUP_KEEP ---"
+# Run 22 more post-apply cycles with KEEP=3 and confirm trim.
+KEEP_DIR="$TMPDIR/home/.config/hs-lander/testacct/.profile-backups-keep3"
+for i in 1 2 3 4 5; do
+  HOME="$TMPDIR/home" PATH="$TMPDIR/mock-bin:$PATH" \
+    HS_LANDER_PROJECT_DIR="$TMPDIR/project" \
+    HS_LANDER_BACKUP_KEEP=3 \
+    HS_LANDER_PROFILE_BACKUP_DIR="$KEEP_DIR" \
+    bash "$TMPDIR/project/scripts/post-apply.sh" >/dev/null
+  sleep 0.05 2>/dev/null || true
+done
+keep3_count=$(find "$KEEP_DIR" -name 'testproj.sh.*' -type f | wc -l | tr -d ' ')
+assert_equal "$keep3_count" "3" "HS_LANDER_BACKUP_KEEP=3 retained after 5 runs"
 
 test_summary
