@@ -20,7 +20,7 @@ fi
 account="$1"
 project="$2"
 
-# shellcheck source=lib/validate-name.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
 if ! is_valid_name "$account"; then
   echo "INIT_POINTER=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"

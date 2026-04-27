@@ -76,7 +76,7 @@ if [[ $# -eq 0 ]]; then
   exit 1
 fi
 
-# shellcheck source=lib/validate-name.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
 if ! is_valid_name "$account"; then
   echo "SET_FIELD=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"

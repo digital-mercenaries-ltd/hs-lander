@@ -38,11 +38,18 @@ _sed_escape() {
   printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
 }
 
+# Sourcing chain (project.config.sh) defines these; shellcheck can't see across
+# the source boundary. The underscore-prefixed locals below are sed-escaped
+# views of the same values — disable SC2153 (misspelling) so the leading-
+# underscore convention doesn't trip the check on every line.
+# shellcheck disable=SC2153
 _PORTAL_ID=$(_sed_escape "$HUBSPOT_PORTAL_ID")
+# shellcheck disable=SC2153
 _REGION=$(_sed_escape "$HUBSPOT_REGION")
 _HSFORMS_HOST=$(_sed_escape "$HSFORMS_HOST")
 _CAPTURE_FORM_ID=$(_sed_escape "${CAPTURE_FORM_ID:-}")
 _SURVEY_FORM_ID=$(_sed_escape "${SURVEY_FORM_ID:-}")
+# shellcheck disable=SC2153
 _DOMAIN=$(_sed_escape "$DOMAIN")
 _GA4_ID=$(_sed_escape "$GA4_MEASUREMENT_ID")
 _DM_PATH=$(_sed_escape "$DM_UPLOAD_PATH")

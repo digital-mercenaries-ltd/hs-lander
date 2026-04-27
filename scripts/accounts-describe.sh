@@ -23,7 +23,7 @@ if [[ $# -lt 1 || -z "${1:-}" ]]; then
 fi
 account="$1"
 
-# shellcheck source=lib/validate-name.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
 if ! is_valid_name "$account"; then
   echo "ACCOUNT_STATUS=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"

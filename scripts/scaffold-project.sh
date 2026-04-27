@@ -32,7 +32,7 @@ project="$2"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 framework_home="$(dirname "$script_dir")"
 
-# shellcheck source=lib/validate-name.sh
+# shellcheck source=/dev/null
 source "$script_dir/lib/validate-name.sh"
 
 if ! is_valid_name "$account"; then
