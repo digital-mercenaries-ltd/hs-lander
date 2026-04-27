@@ -24,9 +24,10 @@ Plans written and reviewed; implementation not yet started.
 
 | Plan | Depends on | Likely target release |
 |---|---|---|
-| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1 shipped; needs probe before prescriptive sections | v1.8.2 or v1.9.0 (folded if convenient) |
-| 2026-04-22-plan-review-gate.md | v1.8.1 shipped | v1.9.0 (paired with backup-state-and-profiles) |
-| 2026-04-22-backup-state-and-profiles.md | v1.8.1 shipped | v1.9.0 (paired with plan-review-gate) |
+| 2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md | v1.8.1 shipped; B3 sub-component depends on live-portal probe | v1.9.0 (next minor) |
+| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1 shipped; folded into v1.9.0 plan as Component 4 — kept here for the standalone problem statement and design candidates | v1.9.0 (or v1.9.1 if probes contradict design) |
+| 2026-04-22-plan-review-gate.md | v1.8.1 shipped; folded into v1.9.0 plan as Component 1 — kept here verbatim because v1.9.0 plan composes it without re-deciding | v1.9.0 |
+| 2026-04-22-backup-state-and-profiles.md | v1.8.1 shipped; folded into v1.9.0 plan as Component 1 — kept here verbatim because v1.9.0 plan composes it without re-deciding | v1.9.0 |
 
 ### Pending — to be written
 
@@ -34,8 +35,7 @@ Concrete work scoped but no plan file yet. Listed here so plan authors know what
 
 | Plan | Likely target release | Notes |
 |---|---|---|
-| v1.9.0 lib + preflight refactor | v1.9.0 | `scripts/lib/` consolidation (Keychain reader with xtrace, sed portability, var extractor, validator extension), `preflight.sh` decomposition. Bundles with the safety pair above. |
-| v1.9.1 ergonomics (R9 sub-items 2 + 3, scaffold-to-plan test, VERSION.compat) | v1.9.1 | Operator ergonomics + test pyramid widening. |
+| v1.9.1 ergonomics (R9 sub-items 2 + 3, scaffold-to-plan test, VERSION.compat) | v1.9.1 | Operator ergonomics + test pyramid widening. The version-drift warning systematically prevents the recurrence of v1.8.1's scaffold-pin defect. |
 | v2.0 breaking changes (R5 main + scope auto-discovery, output-contract normalisation, migration consolidation) | v2.0 | Major-version cut; multiple breaking-candidate items already noted in roadmap. |
 
 ### Complete (archived)
