@@ -59,6 +59,8 @@ fi
 #    Two-pass design: a collision in the middle of copying would otherwise
 #    leave the project in a partial-scaffold state that won't re-run cleanly.
 dest_scripts="$project_dir/scripts"
+dest_lib="$dest_scripts/lib"
+dest_preflight_d="$dest_scripts/preflight.d"
 script_sources=()
 script_dests=()
 for entry in "$framework_home/scripts"/*.sh; do
@@ -66,6 +68,34 @@ for entry in "$framework_home/scripts"/*.sh; do
   script_sources+=("$entry")
   script_dests+=("$dest_scripts/$(basename "$entry")")
 done
+
+# scripts/lib/*.sh — required by preflight.sh runner (sources tier-classify,
+# keychain, source-vars) and by build.sh / set-project-field.sh / etc.
+# (sed-portable). Copied as a unit so the scaffold-shipped project has the
+# same lib surface as the framework install it was scaffolded from.
+lib_sources=()
+lib_dests=()
+if [[ -d "$framework_home/scripts/lib" ]]; then
+  for entry in "$framework_home/scripts/lib"/*.sh; do
+    [[ -f "$entry" ]] || continue
+    lib_sources+=("$entry")
+    lib_dests+=("$dest_lib/$(basename "$entry")")
+  done
+fi
+
+# scripts/preflight.d/*.sh — the decomposed preflight checks (v1.9.0
+# Component 3). Without these the runner refuses to run (exit 2). README.md
+# is also copied so the project ships its own copy of the dependency-graph
+# documentation.
+preflight_d_sources=()
+preflight_d_dests=()
+if [[ -d "$framework_home/scripts/preflight.d" ]]; then
+  for entry in "$framework_home/scripts/preflight.d"/*; do
+    [[ -f "$entry" ]] || continue
+    preflight_d_sources+=("$entry")
+    preflight_d_dests+=("$dest_preflight_d/$(basename "$entry")")
+  done
+fi
 
 template_sources=()
 template_dests=()
@@ -82,7 +112,7 @@ done
 version_src="$framework_home/VERSION"
 version_dest="$project_dir/VERSION"
 
-for dest in "${script_dests[@]}" "${template_dests[@]}" "$version_dest"; do
+for dest in "${script_dests[@]}" "${lib_dests[@]}" "${preflight_d_dests[@]}" "${template_dests[@]}" "$version_dest"; do
   if [[ -e "$dest" ]]; then
     echo "SCAFFOLD=error collision $dest"
     exit 1
@@ -97,6 +127,28 @@ for i in "${!script_sources[@]}"; do
   chmod +x "${script_dests[$i]}"
 done
 echo "SCAFFOLD_SCRIPTS=copied $dest_scripts"
+
+# scripts/lib/ — sourced by the top-level scripts (preflight.sh, build.sh,
+# set-project-field.sh, etc.). Lib files are NOT executable; chmod +x would
+# be incorrect.
+if (( ${#lib_sources[@]} > 0 )); then
+  mkdir -p "$dest_lib"
+  for i in "${!lib_sources[@]}"; do
+    cp "${lib_sources[$i]}" "${lib_dests[$i]}"
+  done
+  echo "SCAFFOLD_LIB=copied $dest_lib"
+fi
+
+# scripts/preflight.d/ — the decomposed preflight checks (v1.9.0
+# Component 3). The runner sources each *.sh file and refuses to run if the
+# directory is empty.
+if (( ${#preflight_d_sources[@]} > 0 )); then
+  mkdir -p "$dest_preflight_d"
+  for i in "${!preflight_d_sources[@]}"; do
+    cp "${preflight_d_sources[$i]}" "${preflight_d_dests[$i]}"
+  done
+  echo "SCAFFOLD_PREFLIGHT_D=copied $dest_preflight_d"
+fi
 
 for i in "${!template_sources[@]}"; do
   cp -R "${template_sources[$i]}" "${template_dests[$i]}"
