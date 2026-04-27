@@ -19,6 +19,18 @@ if [[ $# -lt 2 || -z "${1:-}" || -z "${2:-}" ]]; then
 fi
 account="$1"
 project="$2"
+
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
+if ! is_valid_name "$account"; then
+  echo "INIT_POINTER=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
+if ! is_valid_name "$project"; then
+  echo "INIT_POINTER=error invalid-project-name '$project' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
+
 project_dir="${HS_LANDER_PROJECT_DIR:-$PWD}"
 pointer="$project_dir/project.config.sh"
 

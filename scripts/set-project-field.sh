@@ -10,7 +10,8 @@
 #   CAPTURE_FORM_ID, SURVEY_FORM_ID, LIST_ID,
 #   LANDING_SLUG, THANKYOU_SLUG,
 #   HUBSPOT_SUBSCRIPTION_ID, HUBSPOT_OFFICE_LOCATION_ID,
-#   EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL
+#   EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL,
+#   EMAIL_REPLY_TO
 #
 # v1.7.0: HOSTING_MODE_HINT removed (was skill-only state, lives in
 # <project>.skillstate.sh now). EMAIL_PREVIEW_TEXT, AUTO_PUBLISH_WELCOME_EMAIL,
@@ -51,6 +52,7 @@ ALLOWED_KEYS=(
   HUBSPOT_OFFICE_LOCATION_ID
   EMAIL_PREVIEW_TEXT
   AUTO_PUBLISH_WELCOME_EMAIL
+  EMAIL_REPLY_TO
 )
 
 _is_allowed_key() {
@@ -71,6 +73,17 @@ shift 2
 
 if [[ $# -eq 0 ]]; then
   echo "SET_FIELD=error no-pairs-given"
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
+if ! is_valid_name "$account"; then
+  echo "SET_FIELD=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
+if ! is_valid_name "$project"; then
+  echo "SET_FIELD=error invalid-project-name '$project' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
   exit 1
 fi
 

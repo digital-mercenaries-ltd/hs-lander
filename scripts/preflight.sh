@@ -268,7 +268,7 @@ if [[ ! -f "$project_config" ]]; then
   echo "PREFLIGHT_PROJECT_PROFILE=missing $project_config does not exist"
   required_failed=1
 else
-  eval "$(_source_vars "$project_config" PROJECT_SLUG DOMAIN DM_UPLOAD_PATH GA4_MEASUREMENT_ID CAPTURE_FORM_ID)"
+  eval "$(_source_vars "$project_config" PROJECT_SLUG DOMAIN DM_UPLOAD_PATH GA4_MEASUREMENT_ID CAPTURE_FORM_ID EMAIL_REPLY_TO)"
   project_missing=()
   for v in PROJECT_SLUG DOMAIN DM_UPLOAD_PATH; do
     [[ -z "${!v:-}" ]] && project_missing+=("$v")

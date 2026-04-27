@@ -22,6 +22,14 @@ if [[ $# -lt 1 || -z "${1:-}" ]]; then
   exit 1
 fi
 account="$1"
+
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
+if ! is_valid_name "$account"; then
+  echo "ACCOUNT_STATUS=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
+
 accounts_dir="${HS_LANDER_CONFIG_DIR:-$HOME/.config/hs-lander}"
 config_path="$accounts_dir/$account/config.sh"
 

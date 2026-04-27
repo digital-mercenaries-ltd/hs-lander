@@ -26,11 +26,11 @@ Reference in your project's `terraform/main.tf`:
 
 ```hcl
 module "account_setup" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.0.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.8.1"
 }
 
 module "landing_page" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.0.0"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.8.1"
   # ... variables
 }
 ```

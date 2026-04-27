@@ -178,6 +178,62 @@ fi
 assert_equal "$result" "true" "no placeholder UUID slugs in plan output"
 
 echo ""
+echo "--- v1.8.1 B1: dropdown survey field renders correct fieldType ---"
+# The fixture declares one survey_field with type="dropdown". The v1.8.0
+# renderer informed-guessed `fieldType = "single_line_text"` here; v1.8.1
+# Fix 10 corrects it to `fieldType = "dropdown"`. Heard's deploy surfaced
+# the original miss. A regression that re-introduces the wrong mapping
+# would let HubSpot Forms v3 reject the apply with a fieldType error.
+assert_file_contains "$PLAN_TXT" 'fieldType *= *"dropdown"' \
+  "survey form renders dropdown fieldType (B1 fix)"
+
+# Belt-and-braces: the dropdown options array must populate from the
+# fixture's options=["Designer","Engineer","Other"].
+assert_file_contains "$PLAN_TXT" '"Designer"' \
+  "dropdown option Designer in plan"
+assert_file_contains "$PLAN_TXT" '"Engineer"' \
+  "dropdown option Engineer in plan"
+
+echo ""
+echo "--- v1.8.1 B2: bool properties carry canonical True/False options ---"
+# include_survey=true auto-instantiates the <slug>_survey_completed bool
+# property via properties.tf. v1.8.0 emitted no options array; HubSpot CRM
+# 400s on bool create without it. v1.8.1 Fix 11 adds the canonical pair.
+assert_file_contains "$PLAN_TXT" "test-project_survey_completed" \
+  "bool survey_completed property in plan"
+assert_file_contains "$PLAN_TXT" 'label *= *"True"' \
+  "bool property carries True option (B2 fix)"
+assert_file_contains "$PLAN_TXT" 'label *= *"False"' \
+  "bool property carries False option (B2 fix)"
+assert_file_contains "$PLAN_TXT" 'value *= *"true"' \
+  "bool property True option has value=\"true\""
+assert_file_contains "$PLAN_TXT" 'value *= *"false"' \
+  "bool property False option has value=\"false\""
+
+echo ""
+echo "--- v1.8.1 B5: survey_form depends_on custom_property ---"
+# v1.8.0 lacked this depends_on; Heard hit a race where HubSpot 400'd the
+# form because field names referenced properties not yet on the contact
+# schema. Workaround was two-pass apply. v1.8.1 Fix 12 closes the race
+# with a graph edge. Verify the edge survives in the parsed config —
+# existence in the plan text alone is not enough; the edge could be
+# rendered as a comment without affecting the graph.
+survey_form_deps=$(jq -r '
+  .configuration.root_module.module_calls.landing_page.module.resources[]
+  | select(.address == "restapi_object.survey_form")
+  | .depends_on // []
+  | join(",")
+' "$PLAN_JSON")
+
+if [[ ",$survey_form_deps," == *",restapi_object.custom_property,"* ]]; then
+  result="true"
+else
+  result="false"
+fi
+assert_equal "$result" "true" \
+  "survey_form depends_on includes restapi_object.custom_property (got: [$survey_form_deps])"
+
+echo ""
 echo "--- No unexpected destroy actions ---"
 destroy_count=$(echo "$PLAN_TEXT" | grep -c "will be destroyed" || true)
 assert_equal "$destroy_count" "0" "no resources to destroy"

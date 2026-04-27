@@ -31,6 +31,18 @@ project="$2"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 framework_home="$(dirname "$script_dir")"
+
+# shellcheck source=/dev/null
+source "$script_dir/lib/validate-name.sh"
+
+if ! is_valid_name "$account"; then
+  echo "SCAFFOLD=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
+if ! is_valid_name "$project"; then
+  echo "SCAFFOLD=error invalid-project-name '$project' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
+  exit 1
+fi
 project_dir="${HS_LANDER_PROJECT_DIR:-$PWD}"
 accounts_dir="${HS_LANDER_CONFIG_DIR:-$HOME/.config/hs-lander}"
 account_config="$accounts_dir/$account/config.sh"
@@ -127,6 +139,12 @@ THANKYOU_SLUG="thank-you"
 # preserve v1.6.7 behaviour; uncomment + set when you want to override.
 # EMAIL_PREVIEW_TEXT=""             # Inbox preview line; empty disables the preview_text widget
 # AUTO_PUBLISH_WELCOME_EMAIL=true   # Skill flips to false on Starter portals (publish endpoint scope-gated)
+
+# Email-sending domain (v1.8.1). Used both as the welcome email's reply-to
+# header and by PREFLIGHT_EMAIL_DNS to probe the right SPF/DKIM/DMARC
+# records when email sends from a subdomain (e.g. mail.example.com) that
+# differs from DOMAIN. Empty falls back to DOMAIN.
+EMAIL_REPLY_TO=""
 EOF
   echo "SCAFFOLD_PROJECT_PROFILE=created $project_profile"
 fi

@@ -1,5 +1,51 @@
 # Changelog
 
+## v1.8.1 (2026-04-27)
+
+Patch release. Twelve surgical fixes from three independent reviews of v1.8.0 (codex code review, architectural review, Heard v1.8.0 deploy session) plus a documentation re-sync. No module input contract changes; no behaviour changes from the consumer's perspective beyond closing the dead-code paths and Starter-blocking defects the reviews surfaced. Existing v1.8.0 state plans clean.
+
+### Fixed
+
+- **Scaffold module pin bumped to v1.8.1** (`scaffold/terraform/main.tf`). Pre-v1.8.1 the pin was stuck at `?ref=v1.6.0`, so newly-scaffolded projects copied v1.8.0 scripts but applied v1.6.0 module code. Every release since v1.6.0 missed silently in fresh scaffolds. Sustainable fix (version-drift warning at preflight time) is queued for v1.9.1.
+- **Scaffold root variables wired through.** `scaffold/terraform/main.tf` now declares `email_reply_to`, `email_preview_text`, `auto_publish_welcome_email`, and `capture_post_submit_action_override` as root variables and passes them into `module.landing_page`. Prior to this, `tf.sh` exported `TF_VAR_*` for these values but the scaffold root never consumed them, so `set-project-field.sh ... AUTO_PUBLISH_WELCOME_EMAIL=false` had no effect on Starter consumers.
+- **`EMAIL_REPLY_TO` reachable end-to-end.** Added to `preflight.sh`'s `_source_vars` extraction, `set-project-field.sh`'s `ALLOWED_KEYS`, `scaffold-project.sh`'s project-profile stub, and `tf.sh`'s `TF_VAR_*` exports. Pre-v1.8.1, `PREFLIGHT_EMAIL_DNS`'s `EMAIL_REPLY_TO`-then-`DOMAIN` preference order always fell through to `DOMAIN` because no path could populate `EMAIL_REPLY_TO`. Consumers whose email-sending domain differs from their landing-page domain (the common case once a project uses `mail.example.com`) now get the right SPF/DKIM/DMARC records probed.
+- **`account-setup/.terraform.lock.hcl` confirmed clean.** Plan's Issue 4 claimed a stale committed lockfile pinning `mastercard/restapi 1.20.0` against `~> 1.19`. Repo audit shows `**/.terraform.lock.hcl` is `.gitignore`d everywhere — no lockfile is tracked, so a fresh `terraform init` always generates against the module's current `~> 2.0` constraint. Live `terraform init -upgrade -backend=false` against the account-setup module confirmed `validate` passes; no committed artefact to update. Issue 4 closed as no-op.
+- **Account/project name validation centralised.** New `scripts/lib/validate-name.sh` exports `is_valid_name`. Sourced by `scaffold-project.sh`, `init-project-pointer.sh`, `set-project-field.sh`, `accounts-describe.sh`, and `projects-list.sh`. Defeats path traversal (`..`), uppercase, dots, slashes, and control chars uniformly at the boundary. `accounts-init.sh` keeps its existing inline regex (matches the lib's pattern); a follow-up cleanup can switch it to use the lib helper.
+- **`post-apply.sh` honours `HS_LANDER_CONFIG_DIR`.** Was hardcoded to `${HOME}/.config/hs-lander/...`. Now matches the rest of the framework's testability pattern. Also gains an append-if-missing fallback so a hand-edited project profile with a missing line gets the line added rather than silently failing the update.
+- **`build.sh` sed substitution escaping.** Replacement values now run through a `_sed_escape` helper that escapes `|`, `&`, and `\`. Pre-v1.8.1 a config value containing any of these (allowed by `set-project-field.sh`'s banned-char check) corrupted the build output silently. Theoretical for current substituted fields; defensive against any future token carrying user-supplied free text.
+- **CI shellcheck globs `scripts/lib/`.** `.github/workflows/ci.yml` now lints `scripts/*.sh scripts/lib/*.sh tests/*.sh`. Pre-v1.8.1 `scripts/lib/tier-classify.sh` (and v1.8.1's new `validate-name.sh`) were unlinted.
+- **B1: `dropdown` fieldType correction** (`forms.tf`). v1.8.0 mapped `dropdown → "single_line_text"` as an informed-guess; HubSpot Forms v3 rejects this with a fieldType error. Now correctly maps `dropdown → "dropdown"`. Surfaced by Heard's deploy. Lower urgency than B2/B5 because v1.8.0's static-form pattern bypasses the embedded HubSpot survey form.
+- **B2: `bool` properties create with canonical True/False options** (`properties.tf`). HubSpot CRM properties API rejects bool property creation without the canonical `[{label:"True",value:"true",displayOrder:0,hidden:false},{label:"False",...,displayOrder:1,...}]` array. The auto-added `<slug>_survey_completed` property hit this on every fresh Starter deploy with `include_survey = true`. Heard worked around manually (created the property via API + `terraform import`); v1.8.1 closes the recurrence path.
+- **B5: `survey_form` waits for `custom_property`** (`forms.tf`). Added `depends_on = [restapi_object.custom_property]`. Without this, Terraform parallelises form creation and CRM property creation; HubSpot 400s the form when its field names reference properties not yet on the contact schema. Heard worked around with two-pass apply; v1.8.1 closes the path with a graph edge.
+- **Documentation re-sync.** `docs/framework.md`, `CLAUDE.md`, and `README.md` updated for v1.7.x / v1.8.x reality: provider version (`~> 2.0`), `project_source` hide via `hidden = true` form-flag (CSS now belt-and-braces), removal of `HOSTING_MODE_HINT`, full `set-project-field.sh` allow-list, tier-aware scope set, 16-line preflight contract, references/ index, build-token table including `__PROJECT_SLUG__`, scripts/lib/ acknowledged. CLAUDE.md's HubSpot API quirks list condensed to the load-bearing shortlist; full catalogue defers to `references/hubspot-api-quirks.md`.
+
+### Migration
+
+All v1.8.1 changes are non-breaking. `terraform plan` against v1.8.1 should show zero changes for a v1.8.0 project.
+
+To upgrade:
+
+```bash
+bash $FRAMEWORK_HOME/scripts/upgrade-project-scripts.sh
+# bump ?ref=v1.8.0 → ?ref=v1.8.1 in terraform/main.tf
+bash scripts/tf.sh init -upgrade
+bash scripts/tf.sh plan
+```
+
+For projects that want to use `EMAIL_REPLY_TO` for email-DNS preflight on a domain different from `DOMAIN`, run once:
+
+```bash
+bash $FRAMEWORK_HOME/scripts/set-project-field.sh <account> <project> EMAIL_REPLY_TO=hello@mail.example.com
+```
+
+Otherwise the existing `DOMAIN`-fallback behaviour is unchanged.
+
+**Heard-specific note.** The B1/B2/B5 fixes ship cleanly for Heard's existing state: B1 is moot (Heard's thank-you uses static `<select>` markup), B2 was worked around via direct API + `terraform import` (future plans no-op; future re-imports clean), B5 was worked around via two-pass apply (the new graph edge means future clean-state applies run in one pass). Net effect: zero state changes.
+
+### Deferred
+
+- **B3 — `welcome_email` PATCH against published state** is architecturally substantial (orchestrate unpublish → PATCH → republish via `terraform_data` local-exec) and tracked separately in `docs/superpowers/plans/2026-04-27-welcome-email-published-state-handling.md`. Likely v1.8.2 or v1.9.0. Heard's interim workaround documented in that plan.
+
 ## v1.8.0 (2026-04-27)
 
 Minor release. Survey-funnel completeness (typed survey fields, enumeration-backed CRM properties, working static survey form via Forms Submissions API, capture redirect with email handoff, survey-completion flag, phantom-form documentation) plus email-deliverability preflight (`PREFLIGHT_EMAIL_DNS`). Module input contract changes are additive — existing v1.7.1 projects with `survey_fields = [{type = "single_line_text", ...}]` continue to work without modification. The capture form's default `postSubmitAction` changes from inline thank-you to redirect-with-email, which is the one breaking-ish change; consumers can preserve old behaviour via the new `capture_post_submit_action_override` variable.

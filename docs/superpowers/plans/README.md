@@ -24,10 +24,9 @@ Plans written and reviewed; implementation not yet started.
 
 | Plan | Depends on | Likely target release |
 |---|---|---|
-| 2026-04-27-v1.8.1-codex-review-fixes.md | v1.8.0 shipped | v1.8.1 (next release) |
-| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1; needs probe before prescriptive sections | v1.8.2 or v1.9.0 (folded if convenient) |
-| 2026-04-22-plan-review-gate.md | v1.8.1 | v1.9.0 (paired with backup-state-and-profiles) |
-| 2026-04-22-backup-state-and-profiles.md | v1.8.1 | v1.9.0 (paired with plan-review-gate) |
+| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1 shipped; needs probe before prescriptive sections | v1.8.2 or v1.9.0 (folded if convenient) |
+| 2026-04-22-plan-review-gate.md | v1.8.1 shipped | v1.9.0 (paired with backup-state-and-profiles) |
+| 2026-04-22-backup-state-and-profiles.md | v1.8.1 shipped | v1.9.0 (paired with plan-review-gate) |
 
 ### Pending — to be written
 
@@ -64,6 +63,7 @@ Plans that have shipped and are reflected in the framework source. Files moved t
 | `archive/2026-04-26-v1.7.0-scaffold-hubl-and-tier-aware-preflight.md` | Complete | v1.7.0 |
 | `archive/2026-04-27-v1.7.1-bugfixes-and-script-refresh.md` | Complete | v1.7.1 |
 | `archive/2026-04-27-v1.8.0-survey-schema-and-email-dns.md` | Complete | v1.8.0 |
+| `archive/2026-04-27-v1.8.1-codex-review-fixes.md` | Complete | v1.8.1 |
 
 ### Superseded (archived)
 
