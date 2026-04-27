@@ -12,6 +12,9 @@
 #   and writes there.
 set -euo pipefail
 
+# shellcheck source=lib/sed-portable.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"
+
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 TF_DIR="$PROJECT_DIR/terraform"
 
@@ -28,24 +31,6 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Expected at \$HS_LANDER_CONFIG_DIR/<account>/<project>.sh (default ~/.config/hs-lander/) per the two-tier config layout." >&2
   exit 1
 fi
-
-# Portable in-place sed
-_sed_inplace() {
-  if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
-
-# Escape sed replacement-side metacharacters: |, &, and \. Mirrors
-# set-project-field.sh's _has_banned_char permits — | and & can survive
-# operator edits to the profile and end up reaching post-apply via the
-# sourcing chain. Today's terraform outputs (numeric form/list IDs) won't
-# carry them, but the helper is general-purpose and forward-compatible.
-_sed_escape() {
-  printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
-}
 
 # Update (or append) a KEY=VALUE assignment in $file.
 #
@@ -65,8 +50,8 @@ _update_field() {
   case "$rc" in
     0)
       local escaped
-      escaped=$(_sed_escape "$value")
-      _sed_inplace -E "s|^[[:space:]]*(export[[:space:]]+)?${key}=.*|${key}=\"${escaped}\"|" "$file"
+      escaped=$(sed_escape_replacement "$value")
+      sed_inplace -E "s|^[[:space:]]*(export[[:space:]]+)?${key}=.*|${key}=\"${escaped}\"|" "$file"
       ;;
     1)
       printf '%s="%s"\n' "$key" "$value" >> "$file"

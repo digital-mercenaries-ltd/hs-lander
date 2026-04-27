@@ -38,6 +38,9 @@
 #                                   no-pairs-given
 set -euo pipefail
 
+# shellcheck source=lib/sed-portable.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"
+
 ALLOWED_KEYS=(
   PROJECT_SLUG
   DOMAIN
@@ -154,7 +157,7 @@ for i in "${!keys[@]}"; do
   # so escape `\`, `|`, and `&` (the whole-match metachar) in the value.
   # The other "scary" shell metachars (" $ ` \ newline) are rejected up-front
   # by _has_banned_char, so we don't need to escape them here.
-  v_escaped=$(printf '%s' "$v" | sed -e 's/[\\|&]/\\&/g')
+  v_escaped=$(sed_escape_replacement "$v")
   if grep -qE "^[[:space:]]*(export[[:space:]]+)?$k=" "$tmp_path"; then
     # In-place edit on the temp copy. `sed -i` differs between BSD/GNU
     # so we use the portable `sed ... > new && mv` dance.

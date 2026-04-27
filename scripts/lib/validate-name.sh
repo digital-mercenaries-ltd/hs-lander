@@ -17,6 +17,17 @@
 #     echo "<COMMAND>=error invalid-account-name '$account' (...)"
 #     exit 1
 #   fi
+#
+# Defensive guards (v1.9.0 — silent-failure-hunter H3 / H4):
+# - exactly 1 arg required; multi-arg call is a typo (silently validating
+#   only the first arg would let through whichever later arg the caller
+#   forgot to validate).
+# - reads via "${1:-}" so callers under `set -u` who pass a stale or unset
+#   variable don't crash with "$1: unbound variable" before validation.
 is_valid_name() {
-  [[ "$1" =~ ^[a-z0-9][a-z0-9-]*$ ]]
+  if (( $# != 1 )); then
+    echo "is_valid_name: expected 1 arg, got $#" >&2
+    return 2
+  fi
+  [[ "${1:-}" =~ ^[a-z0-9][a-z0-9-]*$ ]]
 }

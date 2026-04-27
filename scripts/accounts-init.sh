@@ -22,6 +22,9 @@
 #   ACCOUNTS_INIT=error <reason>       — invalid input (exit 1)
 set -euo pipefail
 
+# shellcheck source=lib/validate-name.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
+
 if [[ $# -lt 5 || $# -gt 7 ]]; then
   echo "ACCOUNTS_INIT=error usage: accounts-init.sh <account> <portal-id> <region> <domain-pattern> <token-keychain-service> [<subscription-id>] [<office-location-id>]" >&2
   exit 1
@@ -37,8 +40,11 @@ office_location_id="${7:-}"
 # Validate account name: lowercase letters, digits, hyphens only. Rejects
 # empty, slashes (path traversal), dots, spaces, uppercase — keeps the
 # ~/.config/hs-lander/<account>/ convention clean and defeats `..` tricks.
-if [[ ! "$account" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-  echo "ACCOUNTS_INIT=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens)"
+# Uses the shared lib helper introduced in v1.8.1 (Component 2.5 of v1.9.0
+# switched the inline regex to the lib for consistency across all six
+# config-touching scripts).
+if ! is_valid_name "$account"; then
+  echo "ACCOUNTS_INIT=error invalid-account-name '$account' (expected lowercase letters, digits, hyphens; must start with letter or digit)"
   exit 1
 fi
 

@@ -97,3 +97,17 @@ jobs:
 
       - name: Run test-version.sh
         run: bash tests/test-version.sh
+
+  lib-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run test-validate-name.sh
+        run: bash tests/test-validate-name.sh
+
+      - name: Run test-sed-portable.sh
+        run: bash tests/test-sed-portable.sh
+
+      - name: Run test-keychain-lib.sh
+        run: bash tests/test-keychain-lib.sh

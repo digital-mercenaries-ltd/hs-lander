@@ -140,4 +140,30 @@ fi
 # Existing package.json preserved
 assert_equal "$(cat "$TMP4/proj/package.json")" "pre-existing-package-json" "existing template file untouched on late collision"
 
+# --- Scenario 5: invalid account name rejected (v1.9.0 validate-name lib) ---
+echo ""
+echo "--- Scenario 5: invalid-name rejected ---"
+TMP5=$(mktemp -d)
+mkdir -p "$TMP5/cfg/dml"
+echo 'HUBSPOT_PORTAL_ID="1"' > "$TMP5/cfg/dml/config.sh"
+mkdir -p "$TMP5/proj"
+exit5=0
+HS_LANDER_CONFIG_DIR="$TMP5/cfg" HS_LANDER_PROJECT_DIR="$TMP5/proj" \
+  bash "$REPO_DIR/scripts/scaffold-project.sh" '..' someproject >"$TMP5/log" 2>&1 || exit5=$?
+assert_equal "$exit5" "1" "exit 1 on '..' account name"
+assert_file_contains "$TMP5/log" "SCAFFOLD=error invalid-account-name" "invalid-account-name error"
+# Project dir should not have scripts/ etc. populated by a rejected scaffold.
+if [[ -d "$TMP5/proj/scripts" ]]; then
+  assert_equal "files-copied" "must-not-have-been-copied" "scripts/ must not be created when validation rejected"
+else
+  assert_equal "1" "1" "no scripts/ written on validation rejection"
+fi
+
+exit6=0
+HS_LANDER_CONFIG_DIR="$TMP5/cfg" HS_LANDER_PROJECT_DIR="$TMP5/proj" \
+  bash "$REPO_DIR/scripts/scaffold-project.sh" dml 'Bad/Name' >"$TMP5/log6" 2>&1 || exit6=$?
+assert_equal "$exit6" "1" "exit 1 on slash in project name"
+assert_file_contains "$TMP5/log6" "SCAFFOLD=error invalid-project-name" "invalid-project-name error"
+rm -rf "$TMP5"
+
 test_summary

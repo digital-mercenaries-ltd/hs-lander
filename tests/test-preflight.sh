@@ -63,10 +63,13 @@ setup_env() {
     "$dir/mock-bin"
   cp "$REPO_DIR/scripts/preflight.sh" "$dir/project/scripts/preflight.sh"
   chmod +x "$dir/project/scripts/preflight.sh"
-  # Tier classifier lives in scripts/lib/ and is sourced by preflight.sh —
-  # mirror the layout so the source line resolves in the test sandbox.
+  # Tier classifier and other lib helpers live in scripts/lib/ and are
+  # sourced by preflight.sh — mirror the layout so the source lines resolve
+  # in the test sandbox. v1.9.0 added source-vars.sh.
   mkdir -p "$dir/project/scripts/lib"
   cp "$REPO_DIR/scripts/lib/tier-classify.sh" "$dir/project/scripts/lib/tier-classify.sh"
+  cp "$REPO_DIR/scripts/lib/source-vars.sh" "$dir/project/scripts/lib/source-vars.sh"
+  cp "$REPO_DIR/scripts/lib/keychain.sh" "$dir/project/scripts/lib/keychain.sh"
   # VERSION file at the project root, mirroring scaffold-project.sh layout.
   # preflight.sh resolves VERSION from its own script location, so this sits
   # at $dir/project/VERSION (one level up from $dir/project/scripts/).

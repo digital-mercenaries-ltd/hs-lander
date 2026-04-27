@@ -12,18 +12,20 @@ PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 # point at /scripts/... instead of $PROJECT_DIR/scripts/...
 export HS_LANDER_PROJECT_DIR="$PROJECT_DIR"
 
+# shellcheck source=lib/keychain.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
+
 # shellcheck source=/dev/null
 source "$PROJECT_DIR/project.config.sh"
 
 # Read token from Keychain using the service name from the account config.
+# v1.9.0 (Component 2.4): xtrace-safe lib helper replaces the inline
+# `security find-generic-password` block. Caller responsibility for the
+# subsequent `export TF_VAR_hubspot_token` expansion is unchanged — any
+# operator running `bash -x scripts/tf.sh` should still wrap their session,
+# but the lib closes the leak for the security call itself.
 : "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
-HUBSPOT_TOKEN=$(security find-generic-password \
-  -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
-  -a "$USER" -w 2>/dev/null) || {
-  echo "ERROR: Could not read Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE'." >&2
-  echo "Add it with: security add-generic-password -s '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE' -a \"\$USER\" -w 'TOKEN'" >&2
-  exit 1
-}
+HUBSPOT_TOKEN=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE") || exit 1
 
 # Export Terraform variables. Values sourced from the account config
 # (via project.config.sh) and the project profile (same source chain).

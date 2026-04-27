@@ -87,4 +87,25 @@ else
   assert_equal "1" "1" "project dir not silently created"
 fi
 
+# --- Scenario 6: invalid-name validation (v1.9.0 validate-name lib) ---
+echo ""
+echo "--- Scenario 6: invalid-name rejected ---"
+TMP6=$(mktemp -d)
+exit6=0
+HS_LANDER_PROJECT_DIR="$TMP6" bash "$REPO_DIR/scripts/init-project-pointer.sh" '..' someproject >"$TMP6/log" 2>&1 || exit6=$?
+assert_equal "$exit6" "1" "exit 1 on '..' account name"
+assert_file_contains "$TMP6/log" "INIT_POINTER=error invalid-account-name" "invalid-account-name error"
+if [[ -f "$TMP6/project.config.sh" ]]; then
+  assert_equal "pointer-was-written" "must-not-have-been" "pointer file should not exist when validation rejected"
+else
+  assert_equal "1" "1" "no pointer file written on validation rejection"
+fi
+
+exit7=0
+HS_LANDER_PROJECT_DIR="$TMP6" bash "$REPO_DIR/scripts/init-project-pointer.sh" dml 'Up_Case' >"$TMP6/log7" 2>&1 || exit7=$?
+assert_equal "$exit7" "1" "exit 1 on uppercase/underscore project name"
+assert_file_contains "$TMP6/log7" "INIT_POINTER=error invalid-project-name" "invalid-project-name error"
+
+rm -rf "$TMP6"
+
 test_summary

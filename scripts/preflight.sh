@@ -65,6 +65,12 @@ trap 'unset token; rm -f "$scopes_body_file" "$account_info_body_file" "$domains
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/tier-classify.sh"
 
+# Keychain reader with xtrace suppression baked in. v1.9.0 (Component 2.4)
+# replaces the inline `security find-generic-password` block in the
+# CREDENTIAL section below.
+# shellcheck source=lib/keychain.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
+
 # --- TOOLS_REQUIRED ---
 # Runs first so tool availability is reported even when config is unset.
 # `command -v` is safe under xtrace — no secrets expanded here.
@@ -175,18 +181,14 @@ _extract_pointer_vars() {
 #
 # Scaffold-shipped configs don't use set -u, so this is a theoretical
 # concern for hand-edited configs.
-_source_vars() {
-  local path="$1"; shift
-  (
-    set +eu
-    # shellcheck source=/dev/null
-    source "$path" 2>/dev/null || true
-    set +u
-    for v in "$@"; do
-      printf '%s=%q\n' "$v" "${!v:-}"
-    done
-  )
-}
+#
+# v1.9.0 (Component 2.3): the implementation moved to scripts/lib/source-vars.sh
+# so init-project-pointer.sh and any future config-touching script can
+# share the same extractor. The local alias below preserves the call sites
+# below; in v1.9.x cleanup the call sites can switch to `source_vars` directly.
+# shellcheck source=lib/source-vars.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/source-vars.sh"
+_source_vars() { source_vars "$@"; }
 
 # --- PROJECT_POINTER ---
 if [[ ! -f "$PROJECT_DIR/project.config.sh" ]]; then
@@ -315,9 +317,13 @@ else
   scopes_body_file=""
   domains_status="000"
   domains_curl_exit=0
-  if token=$(security find-generic-password \
-               -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
-               -a "$USER" -w 2>/dev/null); then
+  # Use the lib helper for the security call. Xtrace is already suppressed
+  # for the surrounding block (we need it suppressed for the subsequent
+  # curl calls too, where `Authorization: Bearer $token` would leak under
+  # `bash -x`); keychain_read no-ops its own xtrace dance because we're
+  # already off, and we keep the wider suppression for the API probes
+  # below.
+  if token=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" 2>/dev/null); then
     if [[ -n "$token" ]]; then
       credential_state="found"
       # Capture curl's exit code separately (via `|| curl_exit=$?`) so a

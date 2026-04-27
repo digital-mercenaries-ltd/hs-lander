@@ -4,6 +4,9 @@
 #        scripts/hs-curl.sh POST /marketing/v3/forms -d '{"name":"test"}'
 set -euo pipefail
 
+# shellcheck source=lib/keychain.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
+
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 
 # shellcheck source=/dev/null
@@ -19,13 +22,9 @@ API_PATH="$2"
 shift 2
 
 # Read token from Keychain using the service name from the account config.
+# v1.9.0 (Component 2.4): xtrace-safe lib helper.
 : "${HUBSPOT_TOKEN_KEYCHAIN_SERVICE:?HUBSPOT_TOKEN_KEYCHAIN_SERVICE must be set in the account config}"
-HUBSPOT_TOKEN=$(security find-generic-password \
-  -s "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE" \
-  -a "$USER" -w 2>/dev/null) || {
-  echo "ERROR: Could not read Keychain entry '$HUBSPOT_TOKEN_KEYCHAIN_SERVICE'." >&2
-  exit 1
-}
+HUBSPOT_TOKEN=$(keychain_read "$HUBSPOT_TOKEN_KEYCHAIN_SERVICE") || exit 1
 
 exec curl -s -X "$METHOD" \
   "https://api.hubapi.com${API_PATH}" \

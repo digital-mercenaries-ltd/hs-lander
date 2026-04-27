@@ -13,9 +13,10 @@ echo "=== test-build.sh ==="
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-# Create fake project structure
-mkdir -p "$TMPDIR/scripts"
+# Create fake project structure (build.sh sources lib/sed-portable.sh)
+mkdir -p "$TMPDIR/scripts/lib"
 cp "$REPO_DIR/scripts/build.sh" "$TMPDIR/scripts/build.sh"
+cp "$REPO_DIR/scripts/lib/sed-portable.sh" "$TMPDIR/scripts/lib/sed-portable.sh"
 cp "$REPO_DIR/tests/fixtures/project.config.sh" "$TMPDIR/project.config.sh"
 cp -r "$REPO_DIR/tests/fixtures/src" "$TMPDIR/src"
 

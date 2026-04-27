@@ -34,24 +34,13 @@ fi
 project_dir="${HS_LANDER_PROJECT_DIR:-$PWD}"
 pointer="$project_dir/project.config.sh"
 
-# Extract a single VAR=value from a shell-syntax file without sourcing it.
+# Parse a single VAR=value from a shell-syntax file without sourcing it.
 # Matches: VAR="value" | VAR='value' | VAR=value | export-prefixed forms.
-# Same extractor shape as preflight.sh (keeps behaviour consistent).
-_extract_var() {
-  local path="$1" var="$2"
-  awk -v V="$var" '
-    match($0, "^[[:space:]]*(export[[:space:]]+)?"V"=") {
-      rest = substr($0, RSTART + RLENGTH)
-      if (rest ~ /^"/) {
-        if (match(rest, /^"[^"]*"/)) { print substr(rest, 2, RLENGTH - 2); exit }
-      } else if (rest ~ /^\x27/) {
-        if (match(rest, /^\x27[^\x27]*\x27/)) { print substr(rest, 2, RLENGTH - 2); exit }
-      } else {
-        if (match(rest, /^[^[:space:]#]+/)) { print substr(rest, 1, RLENGTH); exit }
-      }
-    }
-  ' "$path"
-}
+# v1.9.0 (Component 2.3): implementation moved to scripts/lib/source-vars.sh
+# so preflight.sh can share the same extractor.
+# shellcheck source=lib/source-vars.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/source-vars.sh"
+_extract_var() { extract_var_via_parse "$@"; }
 
 _write_pointer() {
   cat > "$pointer" <<EOF
