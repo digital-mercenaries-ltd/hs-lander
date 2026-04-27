@@ -25,6 +25,7 @@ Plans written and reviewed; implementation not yet started.
 | Plan | Depends on | Likely target release |
 |---|---|---|
 | 2026-04-27-v1.8.1-codex-review-fixes.md | v1.8.0 shipped | v1.8.1 (next release) |
+| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1; needs probe before prescriptive sections | v1.8.2 or v1.9.0 (folded if convenient) |
 | 2026-04-22-plan-review-gate.md | v1.8.1 | v1.9.0 (paired with backup-state-and-profiles) |
 | 2026-04-22-backup-state-and-profiles.md | v1.8.1 | v1.9.0 (paired with plan-review-gate) |
 
