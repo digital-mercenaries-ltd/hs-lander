@@ -69,6 +69,7 @@ CONF
 
 eval "$(source_vars "$TMPDIR/metachars.sh" WITH_SPACES WITH_DOLLAR WITH_BACKTICK)"
 assert_equal "$WITH_SPACES" "hello world" "value with spaces round-trips"
+# shellcheck disable=SC2016
 assert_equal "$WITH_DOLLAR" '$NOT_INTERPOLATED' "value with literal dollar round-trips"
 assert_equal "$WITH_BACKTICK" 'literal`backtick' "value with literal backtick round-trips"
 unset WITH_SPACES WITH_DOLLAR WITH_BACKTICK
@@ -164,8 +165,10 @@ assert_equal "$got" "" "nonexistent file → empty stdout (caller reports the ab
 # silently following an interpolated path.
 echo ""
 echo "--- extract_var_via_parse: interpolation NOT expanded ---"
+# shellcheck disable=SC2016
 echo 'INTERPOLATED="$NOT_EXPANDED"' > "$TMPDIR/interp-extract.sh"
 got=$(extract_var_via_parse "$TMPDIR/interp-extract.sh" INTERPOLATED)
+# shellcheck disable=SC2016
 assert_equal "$got" '$NOT_EXPANDED' "extract returns literal value (no shell expansion)"
 
 test_summary
