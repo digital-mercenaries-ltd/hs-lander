@@ -46,7 +46,7 @@ src/
 npm run preflight          # Validate config, credentials, and HubSpot readiness
 npm run build              # src/ → dist/ with token substitution
 npm run tf:init            # Initialise Terraform
-npm run setup              # Build + terraform apply
+npm run setup              # Build → plan-review → apply (chained, v1.9.0)
 npm run post-apply         # Write form IDs to ~/.config/hs-lander/<account>/<project>.sh
 npm run build              # Rebuild with form IDs
 npm run deploy             # Upload to HubSpot Design Manager
@@ -124,6 +124,115 @@ The framework is pure plumbing — it sends whatever `DOMAIN` and `LANDING_SLUG`
 Switch modes by editing the project profile (`set-project-field.sh <account> <project> DOMAIN=... LANDING_SLUG=...`) and re-running `terraform apply`. No re-creation of resources needed — the pages' `domain` and `slug` fields update in place.
 
 Hosting-mode hint is no longer a project-profile field — `HOSTING_MODE_HINT` was removed from `set-project-field.sh`'s allow-list in v1.7.0. The skill stores hosting mode in its own `<project>.skillstate.sh`; the framework infers nothing from it.
+
+## Plan review
+
+`npm run setup` no longer auto-approves a Terraform apply. As of v1.9.0 the chain is `build → plan-review → apply`, and `apply` only proceeds when a saved plan file exists. Without one, `tf.sh apply` refuses with `APPLY=error plan-file-missing` so a skill loop or a careless re-run cannot silently destroy or duplicate resources.
+
+`scripts/plan-review.sh` runs `terraform plan -out=<file>` (default `.hs-lander-plan.bin`), parses the JSON via `jq`, and emits a stable-order contract:
+
+```
+PLAN_CREATE=<count>
+PLAN_UPDATE=<count>
+PLAN_DELETE=<count>
+PLAN_REPLACE=<count>
+PLAN_RESOURCES=<json {create:[],update:[],delete:[],replace:[]}>
+PLAN_FILE=<absolute path>
+PLAN_REVIEW=ok|confirm
+PLAN_REVIEW_SEVERITY=info|caution|destructive   # only when PLAN_REVIEW=confirm
+```
+
+Severity is decided by thresholds (highest wins):
+
+| Severity | Trigger | Default threshold | Override |
+|---|---|---|---|
+| `info` | `update > update_threshold` | `100` | `HS_LANDER_MAX_UPDATE` |
+| `caution` | `create > create_threshold` | `50` | `HS_LANDER_MAX_CREATE` |
+| `destructive` | any `delete > 0` or `replace > 0` | `0` | not configurable |
+
+The gate is **advisory**: `PLAN_REVIEW=confirm` does not exit non-zero. The chained `npm run setup` therefore still proceeds to `apply` automatically — the skill (or human operator) is expected to read the `confirm` line and pause for confirmation before letting setup continue. For direct CLI usage without the skill, run the steps separately when you see `confirm`:
+
+```bash
+npm run plan          # writes .hs-lander-plan.bin and emits the contract
+# inspect the output, decide whether to proceed
+npm run apply         # applies the saved plan
+```
+
+Apply consumes the saved plan file and deletes it on success. If state has drifted between plan and apply, Terraform itself refuses — that is the correct safety behaviour and surfaces verbatim.
+
+**Escape hatch.** `HS_LANDER_UNSAFE_APPLY=1 bash scripts/tf.sh apply` runs a plain `terraform apply -auto-approve` with no plan-file requirement. The state backup (see below) still runs unconditionally. Reserved for recovery scenarios; every use logs a noisy warning.
+
+## Backups and recovery
+
+v1.9.0 adds timestamped backups for the two operational files that carry deploy-critical state:
+
+- **Terraform state.** Before every `tf.sh apply` (including the unsafe path), `scripts/backup-file.sh` copies `terraform/terraform.tfstate` to `terraform/state-backups/terraform.tfstate.<ISO-8601>`.
+- **Project profile.** Before every `post-apply.sh` mutation, the same helper copies `~/.config/hs-lander/<account>/<project>.sh` to `~/.config/hs-lander/<account>/.profile-backups/<project>.sh.<ISO-8601>`.
+
+LRU retention defaults to **20** copies per file and trims older entries on each backup. Override with `HS_LANDER_BACKUP_KEEP`.
+
+### Directory layout
+
+```
+<project>/
+  terraform/
+    terraform.tfstate                         # current state
+    terraform.tfstate.backup                  # Terraform's own one-step-back copy
+    state-backups/
+      terraform.tfstate.2026-04-22T14-30-22Z  # framework backups
+      ...
+
+~/.config/hs-lander/<account>/
+  config.sh                                   # account profile (not backed up — see below)
+  <project>.sh                                # current project profile
+  .profile-backups/
+    <project>.sh.2026-04-22T14-31-08Z         # framework backups
+    ...
+```
+
+Dotted directory (`.profile-backups/`) keeps `projects-list.sh`'s `*.sh` glob blind to it — no special-casing needed.
+
+### Restore procedure (manual)
+
+Recovery is deliberate, not scripted: the human (or skill) chooses which timestamp to restore.
+
+**Terraform state:**
+
+```bash
+ls <project>/terraform/state-backups/
+cp <project>/terraform/state-backups/terraform.tfstate.<timestamp> \
+   <project>/terraform/terraform.tfstate
+bash scripts/plan-review.sh    # verify the rollback against current resources
+```
+
+**Project profile:**
+
+```bash
+ls ~/.config/hs-lander/<account>/.profile-backups/
+cp ~/.config/hs-lander/<account>/.profile-backups/<project>.sh.<timestamp> \
+   ~/.config/hs-lander/<account>/<project>.sh
+```
+
+### Override env vars
+
+| Variable | Default |
+|---|---|
+| `HS_LANDER_STATE_BACKUP_DIR` | `<project>/terraform/state-backups` |
+| `HS_LANDER_PROFILE_BACKUP_DIR` | `~/.config/hs-lander/<account>/.profile-backups` |
+| `HS_LANDER_BACKUP_KEEP` | `20` |
+
+### What is *not* backed up
+
+- **Account config** (`~/.config/hs-lander/<account>/config.sh`). Created once via `accounts-init.sh` (which refuses overwrite) and rarely changes; backups would be noise. When R5 (subscription discovery) lands and the framework starts mutating account config, this decision will be revisited.
+- **Other config dirs.** Backups are scoped to the two files known to carry deploy-critical state.
+
+### Sync-service exposure
+
+`state-backups/` and `.profile-backups/` contain HubSpot resource IDs and form metadata — derived deployment data, not credentials. macOS Time Machine, iCloud Drive, Dropbox, etc. running over your home directory or project directory will replicate these off-device. If that's a concern for your operating environment, relocate backups via the override env vars to a path excluded from sync.
+
+### Long-term direction
+
+This is an **interim** safeguard. Remote Terraform backend (S3, HCP Terraform, etc.) is the durable solution for state durability and is on the roadmap. Local timestamped backups close the immediate exposure for solo and small-team workflows; remote backend takes over once teams or audit requirements need it.
 
 ## Authentication
 

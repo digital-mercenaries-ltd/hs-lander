@@ -15,6 +15,7 @@ Current version: see `VERSION` (framework SSoT). `preflight.sh` emits it as `PRE
 v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, the local test suite (550+ assertions across 12 test scripts), and CI workflows are in place.
 
 **Shipped (latest first):**
+- v1.9.0 (2026-04-27) — Component 1 of the master plan: safety pair (plan-review gate + timestamped state/profile backups). New emit prefixes `PLAN_REVIEW`, `PLAN_*`, `APPLY`, `BACKUP` (tracked under R20).
 - v1.8.1 (2026-04-27) — review-and-deploy defects + documentation re-sync (12 fixes from codex review, architectural review, and Heard v1.8.0 deploy)
 - v1.8.0 — survey schema, email DNS preflight, capture redirect, survey-submit.js
 - v1.7.1 — test-trap, include_bottom_cta removal, migration correction, project-script refresh
@@ -74,7 +75,9 @@ terraform -chdir=terraform/modules/landing-page validate
 ```bash
 npm run preflight   # validate config/credential/API/DNS before build/deploy
 npm run build       # src/ → dist/ with token substitution
-npm run setup       # build + terraform apply
+npm run plan        # plan-review.sh — emits PLAN_* contract + PLAN_REVIEW=ok|confirm (v1.9.0)
+npm run apply       # tf.sh apply — consumes saved plan file; backs up state first (v1.9.0)
+npm run setup       # build + plan-review + apply (chained, v1.9.0)
 npm run post-apply  # terraform outputs → ~/.config/hs-lander/<account>/<project>.sh
 npm run deploy      # build + upload dist/ to HubSpot
 npm run watch       # build + poll for changes
@@ -100,7 +103,9 @@ hs-lander/
 │   ├── watch.sh             ← build + poll for changes
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
 │   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering tools, config, credential, API, scopes, DNS, email DNS
-│   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
+│   ├── tf.sh                ← Keychain → TF_VAR_* → terraform; v1.9.0 `apply` verb requires a saved plan file
+│   ├── plan-review.sh           ← v1.9.0 — terraform plan -out + structured PLAN_*/PLAN_REVIEW/PLAN_REVIEW_SEVERITY
+│   ├── backup-file.sh           ← v1.9.0 — timestamped LRU backups; used by tf.sh apply + post-apply.sh
 │   ├── hs-curl.sh           ← Keychain → curl HubSpot API
 │   ├── version.sh               ← FRAMEWORK_VERSION=<value> from ../VERSION
 │   ├── upgrade-project-scripts.sh ← Refresh a project's scripts/ from a newer framework install (v1.7.1)

@@ -12,7 +12,9 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+terraform/state-backups/
 *.tfplan
+.hs-lander-plan.bin
 
 # HubSpot CLI (not used in core workflow)
 hubspot.config.yml
