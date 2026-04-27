@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 99-tools-optional.sh — emits PREFLIGHT_TOOLS_OPTIONAL.
 #
 # Reads: tools_required_ok.

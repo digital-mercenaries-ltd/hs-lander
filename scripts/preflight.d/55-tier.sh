@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 55-tier.sh — emits PREFLIGHT_TIER.
 #
 # Reads: credential_ok, credential_skip_reason, api_skip_reason,

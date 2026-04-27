@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 75-domain-connected.sh — emits PREFLIGHT_DOMAIN_CONNECTED.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason, DOMAIN,

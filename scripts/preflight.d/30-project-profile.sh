@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 30-project-profile.sh — emits PREFLIGHT_PROJECT_PROFILE.
 #
 # Reads: project_pointer_ok, pointer_skip_reason, HS_LANDER_ACCOUNT,

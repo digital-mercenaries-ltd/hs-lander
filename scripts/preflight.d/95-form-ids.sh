@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 95-form-ids.sh — emits PREFLIGHT_FORM_IDS.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason,

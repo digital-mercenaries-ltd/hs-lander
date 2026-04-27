@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 20-account-profile.sh — emits PREFLIGHT_ACCOUNT_PROFILE.
 #
 # Reads: project_pointer_ok, pointer_skip_reason, HS_LANDER_ACCOUNT.

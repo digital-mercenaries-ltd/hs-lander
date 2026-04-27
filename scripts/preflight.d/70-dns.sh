@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 70-dns.sh — emits PREFLIGHT_DNS.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason, DOMAIN,

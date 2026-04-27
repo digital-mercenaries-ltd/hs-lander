@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 65-project-source.sh — emits PREFLIGHT_PROJECT_SOURCE.
 #
 # Reads: credential_ok, credential_skip_reason, api_curl_exit, api_status,

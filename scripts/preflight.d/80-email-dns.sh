@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 80-email-dns.sh — emits PREFLIGHT_EMAIL_DNS.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason,

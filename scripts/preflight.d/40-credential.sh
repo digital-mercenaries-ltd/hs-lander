@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 40-credential.sh — emits PREFLIGHT_CREDENTIAL.
 #
 # Reads: account_profile_ok, project_pointer_ok, pointer_skip_reason,

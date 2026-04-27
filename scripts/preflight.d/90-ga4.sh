@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 90-ga4.sh — emits PREFLIGHT_GA4.
 #
 # Reads: tools_required_ok, project_pointer_ok, pointer_skip_reason,

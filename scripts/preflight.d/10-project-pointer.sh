@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 10-project-pointer.sh — emits PREFLIGHT_PROJECT_POINTER.
 #
 # Reads: tools_required_ok.

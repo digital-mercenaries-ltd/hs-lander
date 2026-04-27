@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # 50-api-access.sh — emits PREFLIGHT_API_ACCESS.
 #
 # Reads: credential_ok, credential_skip_reason, api_status, api_curl_exit.

@@ -1,4 +1,7 @@
+#!/usr/bin/env bash
 # 00-tools-required.sh — emits PREFLIGHT_TOOLS_REQUIRED.
+# Sourced by scripts/preflight.sh; never invoked directly. Shebang is for
+# shellcheck dialect detection only.
 #
 # Runs first so tool availability is reported even when config is unset.
 # `command -v` is safe under xtrace — no secrets expanded here.
