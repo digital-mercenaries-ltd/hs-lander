@@ -6,9 +6,9 @@ Items beyond the shipped framework. Each reduces manual steps or expands capabil
 
 What's actively being worked on or is expected next. Updated when releases ship; kept short so readers can see the near-term focus at a glance.
 
-- **v1.9.0 — safety + structure + B3 + v1.8.1 review carryovers (plan written, pending).** Five-component bundle that composes the existing pending plans (plan-review-gate, backup-state-and-profiles) with new work: `scripts/lib/` consolidation (Keychain reader with xtrace baked in, sed portability, var extractor, `validate-name.sh` extension — building on v1.8.1's seed), `preflight.sh` decomposition (>700 lines triggered the maintainer concern; split into `preflight.d/*.sh` driven by a thin runner with output contract preserved), B3 welcome-email PATCH against published state (folded in from its stub plan; probe-gated), and six v1.8.1 review carryovers (`PREFLIGHT_EMAIL_REPLY_TO` observability line, property type allow-list validation, `_sed_escape` lib extraction, `is_valid_name` defensive guards, `_update_field` atomic-write, comment rot cleanup). Master plan: `docs/superpowers/plans/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md`. Component plans referenced verbatim: `2026-04-22-plan-review-gate.md`, `2026-04-22-backup-state-and-profiles.md`, `2026-04-27-welcome-email-published-state-handling.md`.
+- **v1.9.0 — safety + structure + B3 + v1.8.1 review carryovers (in flight).** Five-component bundle being delivered as separate PRs. **Component 2 — `scripts/lib/` consolidation — shipped (PR #26, commit `9232c70`).** Lib helpers in place: `sed-portable.sh`, `source-vars.sh`, `keychain.sh` (xtrace-safe with three-state outcome `found`/`missing`/`empty`), extended `validate-name.sh`. Carryovers folded in: `_sed_escape` lib extraction, `is_valid_name` guards, `inherit_errexit` defensive, validate-name unit test + per-script invalid-name rejection scenarios. Test count 420 → 528. **Pending components:** Component 1 (safety pair — plan-review-gate + backup-state-and-profiles), Component 3 (`preflight.sh` decomposition into `preflight.d/*.sh`), Component 5 (remaining carryovers — `PREFLIGHT_EMAIL_REPLY_TO`, property type allow-list validation, `_update_field` atomic-write, comment rot cleanup), Component 4 (B3 welcome-email PATCH against published state — probe-gated). Master plan: `docs/superpowers/plans/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md`. Component plans referenced verbatim: `2026-04-22-plan-review-gate.md`, `2026-04-22-backup-state-and-profiles.md`, `2026-04-27-welcome-email-published-state-handling.md`.
 - **v1.9.1 — operator ergonomics + tests (plans to write).** R9 sub-items 2 + 3 (`migrate-project.sh`, `projects-describe.sh` — the version-drift warning closes the recurrence path of the v1.8.1 scaffold-pin defect). Scaffold-to-plan test that exercises `scaffold/terraform/main.tf` not `tests/fixtures/terraform/main.tf`. `VERSION.compat` maintenance process + CI guard.
-- **v2.0 — breaking-change bundle (plans to write).** R5 main + scope auto-discovery (7 → 8 scopes; pre-designed migration messaging including a one-off `PREFLIGHT_SCOPES=mismatch-needs-rotation` transition state). Output-contract vocabulary normalisation across all scripts (nine prefix shapes + 22 state values → unified). Migration consolidation doc ("from any v1.x → v2.0"). Plans archive cull (close R3 permanently, close R8 explicitly).
+- **v2.0 — breaking-change bundle (plans to write).** R5 main + scope auto-discovery (7 → 8 scopes; pre-designed migration messaging including a one-off `PREFLIGHT_SCOPES=mismatch-needs-rotation` transition state). R20 — interface (output contract) normalisation across all scripts (9 prefix shapes + 22 state values → unified). Migration consolidation doc ("from any v1.x → v2.0"). Plans archive cull (close R3 permanently, close R8 explicitly).
 
 ## Deferred / awaiting trigger
 
@@ -52,6 +52,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | R17 | DMARC Progression Coaching in Skill | TBD (skill-only) | Conditional on multi-consumer adoption signals |
 | R18 | Embedded-Survey-Form Alternative (Path A) Coaching | TBD (skill-only) | Deferred — Path B is v1.8.0's design contract |
 | R19 | Tier-Classifier Verification (Pro / Ent rows + NA1 / APAC SPF includes) | TBD (1.x) | Pending portal access at relevant tiers/regions |
+| R20 | Interface (Output Contract) Normalisation across all scripts | v2.0 | Breaking-change — coordinated skill release required |
 | M | Maintainer Tooling (Terraform MCP, CONTRIBUTING.md) | — (non-versioned) | Living recommendation |
 
 ## Shipped (for cross-reference)
@@ -614,6 +615,51 @@ Manual verification per project catches project-specific issues but not framewor
 **Why deferred:** doesn't block any current consumer. Reduces a class of "informed-guess" annotations to "verified" at near-zero implementation cost — a 30-minute task once portal access exists. Promote to a plan when a Pro / Ent / NA1 deploy is on the calendar (tomorrow or next year, no way to know in advance).
 
 **Sub-item already covered:** The Starter row was verified during the v1.7.0 deploy round; v1.8.0's plan includes the explicit annotation update.
+
+---
+
+## R20: Interface (Output Contract) Normalisation across all scripts
+
+**Current state:** every script invents its own emit prefix and state vocabulary. Today's surface, enumerated:
+
+- **9 different prefix shapes:** `PREFLIGHT_*=`, `SCAFFOLD=`, `SCAFFOLD_*=`, `INIT_POINTER=`, `ACCOUNT_STATUS=`, `SET_FIELD=`, `SET_FIELD_*=`, `ACCOUNTS_INIT=`, `PROJECTS=` (with the v1.9.0 safety pair adding `PLAN_REVIEW=`, `PLAN_REVIEW_SEVERITY=`, `BACKUP=`).
+- **22 state values across them:** `ok`, `error`, `missing`, `incomplete`, `created`, `present`, `conflict`, `skipped`, `warn`, `found`, `empty`, `ok-starter`, `not-primary`, `unknown`, `unauthorized`, `forbidden`, `unreachable`, `set`, `fallback`, `confirm`, `info`, `caution`, `destructive` (count varies as components land; the inconsistency is the constant).
+
+The consuming skill carries parser logic for every prefix/state combination. Codex review (during the v1.8.0 cycle) flagged "contract drift but didn't taxonomise" — the inconsistency was visible but unstructured. Each release that adds a new check, command, or terminator extends the divergence.
+
+**Goal:** unify all scripts onto a single output contract — one shared state vocabulary, a consistent prefix shape, an explicit terminator pattern. Operators (and the skill parser) can rely on the same shape regardless of which script emitted the line.
+
+**Two design candidates** (from the v1.8.0 / v1.9.0 sessions; not yet decided):
+
+1. **`<COMMAND>_RESULT=<state>` + data lines + explicit terminator.** Each script emits a fixed first line carrying the overall result, optional data lines (`<COMMAND>_<KEY>=<value>`), and a terminator. Mirrors the existing `SCAFFOLD=ok` / `SET_FIELD=ok` pattern but applied uniformly.
+
+2. **Shared state vocabulary with detail follow-ups.** State values restricted to `ok | missing | error | skipped | warn` (plus a small set of structured exceptions for safety-pair severity). Detail goes in a sibling `<KEY>_DETAIL=…` line where the existing free-text trailing detail lives today. This is cheaper to migrate than a full prefix overhaul; the prefixes stay the same, only the values normalise.
+
+The v2.0 plan author should pick one (or compose them) and produce a vocabulary table mapping every existing line to its post-v2.0 form. No vocabulary table has been drafted to date.
+
+**Why this is breaking-change territory rather than additive:**
+
+- The skill parser (separate plan) currently expects the old shapes. Changing them breaks the skill until the skill ships a coordinated update.
+- Bundling at the major boundary (with R5, migration consolidation, etc.) means consumers upgrade once rather than across successive minor releases.
+- v2.0's coordinated migration is "from any v1.x → v2.0" — the per-script vocabulary changes ride that flow naturally.
+
+**Why this isn't simply a v2.0 sub-bullet anymore:**
+
+This roadmap entry promotes the topic from "an unnumbered sub-bullet of the v2.0 description" to a first-class R-item, so plan authors don't lose track of it when the v2.0 plan is written. A discrete plan should land before v2.0 implementation begins; until then, the entry tracks scope and design candidates.
+
+**Out of scope (deliberate exclusions):**
+
+- Migration consolidation doc (separate v2.0 sub-item) — the *contents* of the migration, not the contract design.
+- R5's `PREFLIGHT_SCOPES=mismatch-needs-rotation` transition state — that's a one-off for the 7→8 scope expansion, defined within the R5 plan, not under R20.
+- Internal `lib/` API shapes (function names, return codes) — those are framework-internal, not part of the skill-facing surface.
+
+**Approach (when promoted to a plan):**
+
+1. Inventory every emit line in every script (use grep + manual read; script doesn't need to be exhaustive — just every line currently parsed by the skill).
+2. Pick the design candidate (1 or 2 above) and draft the vocabulary table.
+3. Identify which scripts need backwards-compatible shims for v1.x → v2.0 transition (e.g. emit both old and new lines for one release before retiring).
+4. Coordinate the v2.0 framework cut with a matching skill release that flips parser expectations.
+5. Document the new contract in `docs/framework.md` as a first-class section so future scripts have a template.
 
 ---
 
