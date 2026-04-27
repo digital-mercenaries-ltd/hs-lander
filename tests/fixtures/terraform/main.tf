@@ -36,6 +36,20 @@ module "landing_page" {
   capture_form_name          = "Test — Signup"
   include_survey             = true
   survey_form_name           = "Test — Survey"
+
+  # Exercise the v1.8.1 dropdown fieldType correction (B1) — the original
+  # v1.8.0 informed-guess emitted "single_line_text" here. Plan-test asserts
+  # the corrected mapping renders.
+  survey_fields = [
+    {
+      name           = "role"
+      label          = "Role"
+      type           = "dropdown"
+      required       = true
+      options        = ["Designer", "Engineer", "Other"]
+      other_overflow = false
+    }
+  ]
   email_name                 = "Test — Welcome"
   email_subject              = "Welcome to Test"
   email_from_name            = "Test Project"

@@ -38,17 +38,44 @@ _sed_inplace() {
   fi
 }
 
-# Update an existing assignment line in $file, or append a new one if no
-# matching key is present. A hand-edited profile that has had a line removed
-# (e.g. SURVEY_FORM_ID dropped because the project doesn't use a survey)
-# would otherwise silently fail to record the value.
+# Escape sed replacement-side metacharacters: |, &, and \. Mirrors
+# set-project-field.sh's _has_banned_char permits — | and & can survive
+# operator edits to the profile and end up reaching post-apply via the
+# sourcing chain. Today's terraform outputs (numeric form/list IDs) won't
+# carry them, but the helper is general-purpose and forward-compatible.
+_sed_escape() {
+  printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
+}
+
+# Update (or append) a KEY=VALUE assignment in $file.
+#
+# - Matches `KEY=`, `export KEY=`, and either form with leading whitespace,
+#   in lockstep with set-project-field.sh's pattern (lines 158-161). A
+#   hand-edited profile using `export CAPTURE_FORM_ID=...` would otherwise
+#   accumulate a duplicate assignment.
+# - Distinguishes grep exit 1 (no match → append) from exit 2+ (IO error
+#   → fail loudly). The default `if grep -q ...; then` collapses both,
+#   silently routing IO failures to the append branch.
+# - Sed-escapes the value so |, &, and \ in future string-valued outputs
+#   round-trip cleanly.
 _update_field() {
   local key="$1" value="$2" file="$3"
-  if grep -q "^${key}=" "$file"; then
-    _sed_inplace "s|^${key}=.*|${key}=\"${value}\"|" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  local rc=0
+  grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file" || rc=$?
+  case "$rc" in
+    0)
+      local escaped
+      escaped=$(_sed_escape "$value")
+      _sed_inplace -E "s|^[[:space:]]*(export[[:space:]]+)?${key}=.*|${key}=\"${escaped}\"|" "$file"
+      ;;
+    1)
+      printf '%s="%s"\n' "$key" "$value" >> "$file"
+      ;;
+    *)
+      echo "ERROR: grep exited $rc reading $file (likely permission or IO error)" >&2
+      exit 1
+      ;;
+  esac
 }
 
 # Read outputs from terraform
