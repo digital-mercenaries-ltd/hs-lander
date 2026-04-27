@@ -12,7 +12,7 @@
 #   and writes there.
 set -euo pipefail
 
-# shellcheck source=lib/sed-portable.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"

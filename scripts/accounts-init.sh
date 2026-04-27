@@ -22,7 +22,7 @@
 #   ACCOUNTS_INIT=error <reason>       — invalid input (exit 1)
 set -euo pipefail
 
-# shellcheck source=lib/validate-name.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/validate-name.sh"
 
 if [[ $# -lt 5 || $# -gt 7 ]]; then

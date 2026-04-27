@@ -68,7 +68,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/tier-classify.sh"
 # Keychain reader with xtrace suppression baked in. v1.9.0 (Component 2.4)
 # replaces the inline `security find-generic-password` block in the
 # CREDENTIAL section below.
-# shellcheck source=lib/keychain.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
 
 # --- TOOLS_REQUIRED ---
@@ -186,7 +186,7 @@ _extract_pointer_vars() {
 # so init-project-pointer.sh and any future config-touching script can
 # share the same extractor. The local alias below preserves the call sites
 # below; in v1.9.x cleanup the call sites can switch to `source_vars` directly.
-# shellcheck source=lib/source-vars.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/source-vars.sh"
 _source_vars() { source_vars "$@"; }
 

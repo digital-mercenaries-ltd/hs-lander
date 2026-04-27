@@ -15,7 +15,7 @@ PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 # default errexit semantics there.
 shopt -s inherit_errexit 2>/dev/null || true
 
-# shellcheck source=lib/sed-portable.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"
 
 # Source config

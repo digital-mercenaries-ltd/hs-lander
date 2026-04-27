@@ -4,7 +4,7 @@
 #        scripts/hs-curl.sh POST /marketing/v3/forms -d '{"name":"test"}'
 set -euo pipefail
 
-# shellcheck source=lib/keychain.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
 
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"

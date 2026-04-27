@@ -12,7 +12,7 @@ PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 # point at /scripts/... instead of $PROJECT_DIR/scripts/...
 export HS_LANDER_PROJECT_DIR="$PROJECT_DIR"
 
-# shellcheck source=lib/keychain.sh
+# shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/keychain.sh"
 
 # shellcheck source=/dev/null
