@@ -37,6 +37,9 @@ done
 # --- Invalid names ---
 echo ""
 echo "--- Invalid names rejected ---"
+# `'$ENV'` is the literal string we're feeding to is_valid_name — single-quoted
+# on purpose so the dollar sign and word are passed through verbatim.
+# shellcheck disable=SC2016
 for name in ".." "acme/foo" "Acme" "ACME" "acme.com" "" "-acme" "acme_foo" "acme foo" "acme/" "/acme" "acme;rm" "acme\$x" '$ENV'; do
   if ! is_valid_name "$name"; then
     PASSES=$((PASSES + 1))
