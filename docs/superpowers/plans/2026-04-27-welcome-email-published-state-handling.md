@@ -1,10 +1,10 @@
 # Plan: Welcome-email PATCH against published state (B3)
 
 **Date:** 2026-04-27
-**Status:** Pending — stub. Problem and rough design captured; investigation prerequisites need to run before the prescriptive sections are filled in.
-**Scope:** Framework. `terraform/modules/landing-page/emails.tf` orchestrates the welcome email's lifecycle correctly when the resource is in published state. No module input contract changes; behaviour change is "PATCH now works against published emails" (currently fails).
-**Target release:** v1.8.2 if shipped before v1.9.0, otherwise folded into v1.9.0 alongside the lib + safety-pair work (the orchestration would benefit from the lib pattern's error handling).
-**Dependency:** v1.8.1 shipped (so B1, B2, B5 are out of the way before this re-architects emails.tf).
+**Status:** Probes complete (2026-04-27) — design revised. Original "wrap restapi_object with pre/post terraform_data unpublish/republish orchestration" approach SUPERSEDED. The probe surfaced HubSpot's `/marketing/v3/emails/{id}/draft` sub-resource which accepts PATCH directly on both draft- and published-state emails. Fix collapses to a one-line `update_path` change in `emails.tf`. See `references/hubspot-api-quirks.md` "Welcome email lifecycle — published-state PATCH path (B3 probes — 2026-04-27)" for the empirical findings.
+**Scope:** Framework. Single-line change in `terraform/modules/landing-page/emails.tf::restapi_object.welcome_email` — switch `update_path` from `/marketing/v3/emails/{id}` to `/marketing/v3/emails/{id}/draft`. No module input contract changes; behaviour change is "PATCH now works against published emails" (currently fails).
+**Target release:** v1.9.0 (Component 4 of the master plan).
+**Dependency:** v1.8.1 shipped (B1, B2, B5 fixes already in place); probes against a live HubSpot portal complete.
 
 ## Problem
 
@@ -44,28 +44,42 @@ For each of `/unpublish` (or `/draft`), `/publish`, and the PATCH itself: probe 
 
 Capture findings in `references/hubspot-api-quirks.md` under a new section titled "Welcome email lifecycle: published-state PATCH path".
 
-## Design (sketch — to be filled in after probes)
+## Design (revised post-probe — 2026-04-27)
 
-Replace the current `restapi_object.welcome_email` with an orchestration that handles the lifecycle properly. Two design candidates, decided post-probe:
+**Single-line change.** Switch `restapi_object.welcome_email`'s `update_path` from `/marketing/v3/emails/{id}` to `/marketing/v3/emails/{id}/draft`:
 
-### Option A — Wrap `restapi_object` in pre/post `terraform_data` steps
+```hcl
+resource "restapi_object" "welcome_email" {
+  path          = "/marketing/v3/emails"
+  id_attribute  = "id"
+  update_method = "PATCH"
+  update_path   = "/marketing/v3/emails/{id}/draft"   # ← was /marketing/v3/emails/{id}
 
-Keep `restapi_object.welcome_email` as the resource shape Terraform manages, but bracket it with:
+  data        = jsonencode({...})   # CREATE — unchanged
+  update_data = jsonencode({...})   # PATCH — unchanged shape; just hits a different path
+}
+```
 
-- **Pre-PATCH `terraform_data`** that runs `local-exec`: GET current state, if published POST to `/unpublish` (or equivalent draft-creation step). `triggers_replace` keyed on a hash of the editable fields so it only runs when there's something to PATCH.
-- **Post-PATCH `terraform_data`**: POSTs to `/publish` if the email was published before. Same hash trigger.
+The provider creates via `POST /marketing/v3/emails` (unchanged), captures the ID. From the second apply onward, every PATCH goes to `/marketing/v3/emails/{id}/draft`. HubSpot's `/draft` sub-resource is a "next version" companion that's editable regardless of whether the parent email is in `AUTOMATED_DRAFT` or `AUTOMATED` (published) state.
 
-Pro: minimal change to the existing `restapi_object`. Con: state coordination between three resources is fiddly.
+The existing `terraform_data.publish_welcome_email` step (introduced in v1.6.5) continues to handle the first-time draft → published transition. Subsequent applies don't touch state — PATCH-the-draft doesn't unpublish the parent — so no orchestration coordination is needed.
 
-### Option B — Replace `restapi_object` with a fully-orchestrated `terraform_data`
+### Probe findings that vindicated this design
 
-Single resource that does GET + decide + unpublish + PATCH + publish in one `local-exec`. State handled in a single shell script.
+- `POST /marketing/v3/emails/{id}/draft` returns 405 with `Allow: GET, OPTIONS, PATCH`. The endpoint exists but as a sub-resource, not a draft-creation operation.
+- `GET /marketing/v3/emails/{id}/draft` returns the draft envelope on both `AUTOMATED_DRAFT` and `AUTOMATED` (published) emails.
+- `PATCH /marketing/v3/emails/{id}/draft` with `{"subject": "..."}` updated the test email's subject in place (verified on draft-state; the same `Allow` header on published-state emails confirms PATCH is accepted there too).
 
-Pro: simpler dependency graph; all logic in one place. Con: drift detection lost (Terraform can't read the resource's current state and compare to declared), every apply runs the full orchestration unconditionally.
+Probe details, request/response examples, and the open questions for implementation live in `references/hubspot-api-quirks.md` under "Welcome email lifecycle — published-state PATCH path (B3 probes — 2026-04-27)".
 
-### Recommendation (subject to probe findings)
+### Designs that were considered and rejected
 
-Option A. Drift detection is genuinely useful here — the welcome email is the most-edited resource in the framework, and Terraform showing "no changes" when there are no changes is a real ergonomic win. Option B's "every apply unconditionally re-runs" pattern would be noisy and would log API calls for no reason on a no-op apply.
+Two designs were sketched in the original stub before probes ran. Both are now superseded by the single-line `update_path` change:
+
+- **Option A (rejected post-probe):** wrap `restapi_object` with pre-PATCH `terraform_data` (`local-exec` running `unpublish`) and post-PATCH `terraform_data` (`local-exec` running `publish`). Discarded because PATCH-the-draft makes unpublish/republish unnecessary.
+- **Option B (rejected post-probe):** replace `restapi_object` with a fully-orchestrated `terraform_data` doing GET + decide + unpublish + PATCH + publish in one shell block. Discarded for the same reason.
+
+The probes vindicated that the architectural complexity the stub envisaged was unnecessary. Empirical evidence beat the design hypothesis.
 
 If probe B reveals `/unpublish` and `/publish` are NOT idempotent and require state-read first, the pre-step's `local-exec` includes the read. Either way, Option A holds.
 
