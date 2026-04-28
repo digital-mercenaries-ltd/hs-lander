@@ -74,6 +74,8 @@ npm run deploy             # Upload to HubSpot Design Manager
 
 Run once per HubSpot account. Creates the `project_source` CRM contact property used for segmenting contacts by project.
 
+**Portal-shared protection (v1.9.2+):** `restapi_object.project_source_property` carries a `lifecycle { prevent_destroy = true }` directive. The property is referenced by every per-project landing-page deployment on the portal — destroying it orphans every other project's contact-list filter and loses the historical segmentation tags written to existing contacts. Terraform rejects any plan that would destroy or replace it; the v1.9.0 plan-review gate (`scripts/plan-review.sh`) escalates the same condition to `PLAN_REVIEW_SEVERITY=portal-shared` and emits `PLAN_REVIEW_PORTAL_SHARED=<csv>` so the skill aborts before Terraform errors. Genuine portal retirement requires removing the lifecycle block — a deliberate, auditable two-step.
+
 ### landing-page
 
 Run per project. Creates: capture form, optional survey form, landing page, thank-you page, welcome email, contact list, and optional custom CRM properties.

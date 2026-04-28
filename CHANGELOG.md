@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.2 (2026-04-28)
+
+Patch release. Three layered protections against accidental destruction of the portal-shared `project_source` CRM property — the one resource in the framework whose destruction has portal-wide blast radius. From the [v1.9.2 plan](docs/superpowers/plans/archive/2026-04-28-v1.9.2-project-source-protection.md). Non-breaking; the plan-review contract grows by one optional line.
+
+### Added
+
+- **`lifecycle { prevent_destroy = true }`** on `restapi_object.project_source_property` in `terraform/modules/account-setup/main.tf`. Any plan that would destroy or replace this resource now fails at plan time with Terraform's built-in error. Genuine portal retirement requires removing the block — a deliberate, auditable two-step. Pure metadata; existing account-setup states absorb it with a zero-diff refresh.
+- **`PLAN_REVIEW_SEVERITY=portal-shared`** — new severity tier in `scripts/plan-review.sh`, escalating above `destructive`. Triggered when a destroy or replace targets any address matching the `PORTAL_SHARED_RESOURCES` allowlist (initial entry: `project_source_property`). Severity rank is now `portal-shared > destructive > caution > info`.
+- **`PLAN_REVIEW_PORTAL_SHARED=<csv>`** — new optional contract line listing the matching addresses. Emitted only when `PLAN_REVIEW_SEVERITY=portal-shared`. Gives skill consumers a clean machine-readable signal to abort with a tailored message before Terraform's prevent-destroy error surfaces.
+
+### Tests
+
+- New: `test-prevent-destroy.sh` — asserts the lifecycle block exists on `project_source_property` and exercises Terraform's destroy rejection via a synthetic null-resource fixture.
+- Extended: `test-plan-review.sh` — two new scenarios (portal-shared escalation, ordinary destructive plan omits `PORTAL_SHARED` line) and a 9-line count assertion for portal-shared output.
+
+### Migration
+
+All v1.9.2 changes are non-breaking. Existing projects pick up the new framework-side script via `upgrade-project-scripts.sh`; the lifecycle guard activates the next time `terraform apply` refreshes the account-setup state. No project-profile changes. `VERSION.compat` is unchanged (`>=1.7.0,<2.0.0`).
+
+### Cross-references
+
+- Plan: [`docs/superpowers/plans/archive/2026-04-28-v1.9.2-project-source-protection.md`](docs/superpowers/plans/archive/2026-04-28-v1.9.2-project-source-protection.md)
+- Skill follow-up: Step 9 abort branch on `PLAN_REVIEW_SEVERITY=portal-shared` (separate skill PR).
+
 ## v1.9.1 (2026-04-28)
 
 Patch release. Five additive operator-ergonomics fixes from the [v1.9.1 plan](docs/superpowers/plans/archive/2026-04-28-v1.9.1-operator-ergonomics-and-tests.md): preflight version-drift check, project migration helper, structured project profile inspection, scaffold-rooted plan test, and the `VERSION.compat` maintenance process. Test count 611 → 706. Non-breaking; preflight contract grows from 17 to 18 lines.
