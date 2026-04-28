@@ -25,6 +25,7 @@ prefix slots in increments of 5 to leave room for future inserts.
 | File                     | Owns line                       |
 | ------------------------ | ------------------------------- |
 | 00-tools-required.sh     | `PREFLIGHT_TOOLS_REQUIRED`      |
+| 05-version-drift.sh      | `PREFLIGHT_VERSION_DRIFT` (v1.9.1)  |
 | 10-project-pointer.sh    | `PREFLIGHT_PROJECT_POINTER`     |
 | 20-account-profile.sh    | `PREFLIGHT_ACCOUNT_PROFILE`     |
 | 30-project-profile.sh    | `PREFLIGHT_PROJECT_PROFILE`     |

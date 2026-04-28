@@ -30,6 +30,15 @@ setup_env() {
   cp "$REPO_DIR/scripts/lib/"*.sh "$dir/project/scripts/lib/"
   cp "$REPO_DIR/scripts/preflight.d/"*.sh "$dir/project/scripts/preflight.d/"
   printf 'test-decomp-1.9.0\n' > "$dir/project/VERSION"
+  # terraform/main.tf with a ?ref= matching VERSION so PREFLIGHT_VERSION_DRIFT
+  # emits `ok` rather than `skipped (terraform/main.tf not found)`. The
+  # decomposition tests don't care which state — just that the line appears.
+  mkdir -p "$dir/project/terraform"
+  cat > "$dir/project/terraform/main.tf" <<'TF'
+module "landing_page" {
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=vtest-decomp-1.9.0"
+}
+TF
   # Minimal config so the preflight has more than just the FRAMEWORK_VERSION
   # line to emit. The downstream curl mocks aren't needed because the
   # gate-cascade tests never reach the credential probes.
@@ -83,7 +92,7 @@ trap 'rm -rf "$TMPA" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPE:-}" "${TMPF:-}"
 LOG_FULL="$TMPA/preflight-full.log"
 run_preflight "$TMPA" "$LOG_FULL"
 full_count=$(grep -c '^PREFLIGHT_' "$LOG_FULL")
-assert_equal "$full_count" "17" "full preflight emits 17 PREFLIGHT_* lines (FRAMEWORK_VERSION + 16 check lines)"
+assert_equal "$full_count" "18" "full preflight emits 18 PREFLIGHT_* lines (FRAMEWORK_VERSION + 17 check lines)"
 
 # Remove the 90-ga4.sh check; assert PREFLIGHT_GA4 disappears and line-count
 # drops by exactly 1.
@@ -91,7 +100,7 @@ rm "$TMPA/project/scripts/preflight.d/90-ga4.sh"
 LOG_NOGA4="$TMPA/preflight-noga4.log"
 run_preflight "$TMPA" "$LOG_NOGA4"
 noga4_count=$(grep -c '^PREFLIGHT_' "$LOG_NOGA4")
-assert_equal "$noga4_count" "16" "removing 90-ga4.sh drops line-count by exactly 1"
+assert_equal "$noga4_count" "17" "removing 90-ga4.sh drops line-count by exactly 1"
 assert_file_not_contains "$LOG_NOGA4" "^PREFLIGHT_GA4=" "PREFLIGHT_GA4= line absent when 90-ga4.sh removed"
 assert_file_contains "$LOG_NOGA4" "^PREFLIGHT_FORM_IDS=" "neighbouring PREFLIGHT_FORM_IDS line still present"
 assert_file_contains "$LOG_NOGA4" "^PREFLIGHT_TOOLS_OPTIONAL=" "PREFLIGHT_TOOLS_OPTIONAL still present"
@@ -106,7 +115,7 @@ rm "$TMPB/project/scripts/preflight.d/99-tools-optional.sh"
 LOG_B="$TMPB/preflight.log"
 run_preflight "$TMPB" "$LOG_B"
 b_count=$(grep -c '^PREFLIGHT_' "$LOG_B")
-assert_equal "$b_count" "16" "removing 99-tools-optional.sh drops line-count by exactly 1"
+assert_equal "$b_count" "17" "removing 99-tools-optional.sh drops line-count by exactly 1"
 assert_file_not_contains "$LOG_B" "^PREFLIGHT_TOOLS_OPTIONAL=" "PREFLIGHT_TOOLS_OPTIONAL absent when 99-tools-optional.sh removed"
 assert_file_contains "$LOG_B" "^PREFLIGHT_FORM_IDS=" "PREFLIGHT_FORM_IDS still present"
 
@@ -166,7 +175,7 @@ echo "--- Scenario F: numeric prefix drives documented contract ordering ---"
 TMPF=$(setup_env)
 LOG_F="$TMPF/preflight.log"
 run_preflight "$TMPF" "$LOG_F"
-expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_EMAIL_REPLY_TO\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_VERSION_DRIFT\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_EMAIL_REPLY_TO\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOG_F")
 assert_equal "$actual_order" "$expected_order" "documented ordering preserved by numeric prefixes"
 
