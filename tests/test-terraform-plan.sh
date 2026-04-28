@@ -234,6 +234,22 @@ assert_equal "$result" "true" \
   "survey_form depends_on includes restapi_object.custom_property (got: [$survey_form_deps])"
 
 echo ""
+echo "--- v1.9.0 B3: welcome_email PATCHes /draft, not /{id} ---"
+# v1.9.0 Component 4 fix for the published-state PATCH rejection. The
+# probes (2026-04-27) showed that the /marketing/v3/emails/{id}/draft
+# sub-resource accepts PATCH on both AUTOMATED_DRAFT and AUTOMATED
+# parents — so update_path swaps from /{id} to /{id}/draft and the
+# Heard interim workarounds (-target= excluding welcome_email, manual
+# UI unpublish) become obsolete.
+welcome_email_update_path=$(jq -r '
+  .configuration.root_module.module_calls.landing_page.module.resources[]
+  | select(.address == "restapi_object.welcome_email")
+  | .expressions.update_path.constant_value // ""
+' "$PLAN_JSON")
+assert_equal "$welcome_email_update_path" "/marketing/v3/emails/{id}/draft" \
+  "welcome_email update_path points at the /draft sub-resource (B3 fix)"
+
+echo ""
 echo "--- No unexpected destroy actions ---"
 destroy_count=$(echo "$PLAN_TEXT" | grep -c "will be destroyed" || true)
 assert_equal "$destroy_count" "0" "no resources to destroy"

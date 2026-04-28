@@ -53,6 +53,19 @@ resource "restapi_object" "welcome_email" {
   id_attribute  = "id"
   update_method = "PATCH"
 
+  # B3 fix: PATCH the /draft sub-resource rather than the parent. HubSpot's
+  # /marketing/v3/emails/{id} endpoint rejects PATCH against published
+  # (state = "AUTOMATED") emails with "Cannot edit a published email via
+  # the update API. Unpublish first, then PATCH." The /draft sub-resource
+  # is editable regardless of parent state — Allow: GET, OPTIONS, PATCH on
+  # both AUTOMATED_DRAFT and AUTOMATED parents (verified 2026-04-27 against
+  # the DML/Heard Starter portal). PATCH-the-draft propagates changes to
+  # the published parent without an unpublish/republish cycle.
+  # See references/hubspot-api-quirks.md "Welcome email lifecycle —
+  # published-state PATCH path (B3 probes — 2026-04-27)" for the empirical
+  # findings and the rejected design alternatives.
+  update_path = "/marketing/v3/emails/{id}/draft"
+
   # POST payload — creates the email as a draft. Publishing happens in the
   # separate `terraform_data.publish_welcome_email` step below.
   data = jsonencode({
