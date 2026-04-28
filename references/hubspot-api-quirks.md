@@ -190,3 +190,74 @@ Same as the Lists race above; consolidated entry kept here for cross-reference. 
 **Quirk:** Every contact-side custom property requires `objectTypeId = "0-1"`. Form fields likewise. Other object types use different IDs but landing pages in the framework only deal with contacts.
 
 **Framework handling:** Hard-coded throughout `forms.tf` and `account-setup/main.tf`. Documentation note rather than dynamic value.
+
+## Welcome email lifecycle — published-state PATCH path (B3 probes — 2026-04-27)
+
+**Quirk (from v1.8.0 deploy):** Once a marketing email is in `state = "AUTOMATED"` (published), `PATCH /marketing/v3/emails/{id}` is rejected by HubSpot with `Cannot edit a published email via the update API. Unpublish first, then PATCH.` This blocks every subsequent `terraform apply` that tries to modify the welcome email's editable fields. Heard's deploy hit it; interim workarounds were `terraform apply -target=...` excluding the email, or manual UI unpublish before each apply.
+
+**Probe context.** Probes run against `dml/heard` on portal `147959629` (EU1, Starter). A throwaway email `397309696229` ("hs-lander B3 probe (delete me)") was created in `AUTOMATED_DRAFT` state and deleted at the end. Production emails were not touched. Token scopes on this portal: `crm.*`, `forms`, `content` — Starter set; lacks `marketing-email` and `transactional-email`, which the framework already accommodates via `auto_publish_welcome_email`.
+
+### Probe A — `/draft` endpoint exists with `Allow: GET, OPTIONS, PATCH`
+
+The `POST /marketing/v3/emails/{id}/draft` shape proposed in the original B3 stub plan does NOT exist as a draft-creation endpoint. Instead, `/marketing/v3/emails/{id}/draft` is a separate **resource path** that exposes the email's draft companion:
+
+```
+POST   /marketing/v3/emails/{id}/draft   → 405 Method Not Allowed
+                                          allow: GET, OPTIONS, PATCH
+GET    /marketing/v3/emails/{id}/draft   → 200, returns the email's draft envelope
+PATCH  /marketing/v3/emails/{id}/draft   → 200, updates the draft (verified on
+                                          AUTOMATED_DRAFT email; same Allow
+                                          header on AUTOMATED — published —
+                                          confirms PATCH is accepted there too)
+```
+
+A PATCH to `/marketing/v3/emails/{id}/draft` with `{"subject": "..."}` updated the draft's subject in place and returned the full email envelope with the new value. The same flow works regardless of whether the parent email is `AUTOMATED_DRAFT` or `AUTOMATED` (published) — the `/draft` sub-resource is always editable and represents "the next version" of the email.
+
+**Implication for B3.** The original stub plan's design (Option A: wrap `restapi_object` with pre/post `terraform_data` running unpublish → PATCH → republish) is **unnecessary**. PATCH to `/marketing/v3/emails/{id}/draft` does the right thing on its own. The current framework's `restapi_object.welcome_email` only needs a small change: switch the `update_path` from `/marketing/v3/emails/{id}` to `/marketing/v3/emails/{id}/draft`.
+
+A subsequent `POST /marketing/v3/emails/{id}/publish` (the existing `terraform_data.publish_welcome_email` step from v1.6.5) promotes the patched draft to live. That step is already in place and continues to gate behind `auto_publish_welcome_email` for tier-aware behaviour.
+
+### Probe B — idempotency of `/publish` and `/unpublish` — NOT RUN
+
+The Starter token lacks `marketing-email` scope, so `POST /marketing/v3/emails/{id}/publish` returns 403 `MISSING_SCOPES` on this portal. Idempotency couldn't be tested.
+
+**Why it doesn't block B3.** With the Probe A finding, the recommended design no longer requires unpublish/republish — PATCH `/draft` operates without changing the email's published state. The `/publish` step is only used for the initial push-to-published transition (gated by `auto_publish_welcome_email`); subsequent applies don't touch state. The idempotency question becomes moot for the steady-state PATCH flow.
+
+If a future need arises (e.g. a "force republish" path), the probe should be re-run on a Pro+ portal where `marketing-email` is available.
+
+### Recommended B3 design (revised)
+
+Replace the original stub's Option A wrapper-with-`terraform_data` design with a **single-line `update_path` change** in the existing `restapi_object.welcome_email`:
+
+```hcl
+resource "restapi_object" "welcome_email" {
+  path          = "/marketing/v3/emails"
+  id_attribute  = "id"
+  update_method = "PATCH"
+  update_path   = "/marketing/v3/emails/{id}/draft"   # ← was /marketing/v3/emails/{id}
+
+  data        = jsonencode({...})
+  update_data = jsonencode({...})
+}
+```
+
+That's it. The provider creates via POST `/marketing/v3/emails`, captures the ID, and from then on every PATCH goes to `/marketing/v3/emails/{id}/draft`. The existing `terraform_data.publish_welcome_email` continues to handle the first-time publish; subsequent applies don't need to touch it because PATCH-the-draft doesn't unpublish the parent.
+
+**Migration impact (much smaller than the original plan suggested).** Existing v1.6.5+ projects with a published `welcome_email` in state see no resource graph changes — only the path of the next PATCH changes, transparent to Terraform. The first apply post-upgrade just makes whatever editable-field changes the consumer has pending; HubSpot accepts them via the draft path and they take effect on the published email automatically (HubSpot promotes the draft on save when the parent is in `AUTOMATED` state, but this needs verification on a real published email post-implementation).
+
+### Open questions
+
+1. **Auto-promote behaviour.** Does HubSpot automatically promote a PATCHed draft to live, or do consumers need an explicit `POST /publish` after every PATCH? The probe didn't test this on a real published email (avoided touching production). Implementation should test on the first deploy and document.
+
+2. **Field-level differences between root and draft.** The probe didn't enumerate which fields are settable via PATCH `/draft` versus PATCH `/{id}`. The v1.6.7 `update_data` payload (which deliberately omits state/isPublished/type/subcategory/emailTemplateMode) probably stays the same shape because it targets editable content fields, but worth a regression test.
+
+3. **First-apply-after-upgrade behaviour.** Whether `terraform plan` shows zero changes for a project whose state already reflects the published email's content vs the new draft path producing spurious diffs needs verification.
+
+### Implementation steps for B3 (revised, much smaller than the stub plan envisaged)
+
+1. Change `update_path` in `terraform/modules/landing-page/emails.tf::restapi_object.welcome_email` to `/marketing/v3/emails/{id}/draft`.
+2. Add a regression assertion in `tests/test-terraform-plan.sh`: the plan output references the draft path.
+3. CHANGELOG entry: B3 closed via `update_path` swap; Heard's interim `-target=...` workaround obsolete; manual UI unpublish workaround obsolete.
+4. Archive the stub plan; mark its frontmatter Status → Complete.
+
+The stub plan's two-`terraform_data`-wrappers-with-hash-triggers Option A approach should be discarded — it was the right design under the assumption that unpublish/republish was needed; with the `/draft` path discovery, that assumption is invalidated.
