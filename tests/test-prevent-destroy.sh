@@ -58,7 +58,7 @@ else
   TESTS=$((TESTS + 1))
   echo "  FAIL: project_source_property is missing prevent_destroy = true"
   echo "  block contents:"
-  echo "$block" | sed 's/^/    /'
+  printf '    %s\n' "${block//$'\n'/$'\n'    }"
 fi
 
 # --- Assertion 2: Terraform rejects destroy when prevent_destroy is set ---
