@@ -15,6 +15,9 @@ Current version: see `VERSION` (framework SSoT). `preflight.sh` emits it as `PRE
 v1.0.0 framework built (Session 2 of the orchestration plan complete). All scripts, both Terraform modules, scaffold templates, the local test suite (550+ assertions across 12 test scripts), and CI workflows are in place.
 
 **Shipped (latest first):**
+- v1.9.2 (2026-04-28) — portal-shared resource protection: `prevent_destroy` lifecycle on `project_source_property` + `PLAN_REVIEW_SEVERITY=portal-shared` tier in plan-review.sh + `PLAN_REVIEW_PORTAL_SHARED` contract line + new `tests/test-prevent-destroy.sh` wired into CI
+- v1.9.1 (2026-04-28) — operator ergonomics: `PREFLIGHT_VERSION_DRIFT`, `migrate-project.sh`, `projects-describe.sh`, scaffold-rooted plan test, `VERSION.compat`
+- v1.9.0 (2026-04-27) — five-component bundle: safety pair (plan-review + backup-file + `tf.sh apply` consumes saved plan), `scripts/lib/` consolidation, preflight decomposition (`preflight.d/`), B3 welcome-email `/draft` PATCH, v1.8.1 review carryovers
 - v1.8.1 (2026-04-27) — review-and-deploy defects + documentation re-sync (12 fixes from codex review, architectural review, and Heard v1.8.0 deploy)
 - v1.8.0 — survey schema, email DNS preflight, capture redirect, survey-submit.js
 - v1.7.1 — test-trap, include_bottom_cta removal, migration correction, project-script refresh

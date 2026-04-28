@@ -65,6 +65,7 @@ Plans that have shipped and are reflected in the framework source. Files moved t
 | `archive/2026-04-27-welcome-email-published-state-handling.md` | Complete (design revised post-probe to one-line `update_path` swap) | v1.9.0 (Component 4) |
 | `archive/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md` | Complete (master plan composing all five components) | v1.9.0 |
 | `archive/2026-04-28-v1.9.1-operator-ergonomics-and-tests.md` | Complete | v1.9.1 |
+| `archive/2026-04-28-v1.9.2-project-source-protection.md` | Complete | v1.9.2 |
 
 ### Superseded (archived)
 
