@@ -6,7 +6,9 @@
   "scripts": {
     "preflight": "bash scripts/preflight.sh",
     "build": "bash scripts/build.sh",
-    "setup": "bash scripts/build.sh && bash scripts/tf.sh apply -auto-approve",
+    "plan": "bash scripts/plan-review.sh",
+    "apply": "bash scripts/tf.sh apply",
+    "setup": "bash scripts/build.sh && bash scripts/plan-review.sh && bash scripts/tf.sh apply",
     "post-apply": "bash scripts/post-apply.sh",
     "deploy": "bash scripts/deploy.sh",
     "watch": "bash scripts/watch.sh",

@@ -15,6 +15,7 @@ set -euo pipefail
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib/sed-portable.sh"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${HS_LANDER_PROJECT_DIR:-$PWD}"
 TF_DIR="$PROJECT_DIR/terraform"
 
@@ -25,12 +26,20 @@ source "$PROJECT_DIR/project.config.sh"
 : "${HS_LANDER_PROJECT:?HS_LANDER_PROJECT must be set in project.config.sh}"
 
 CONFIG_DIR="${HS_LANDER_CONFIG_DIR:-$HOME/.config/hs-lander}"
-CONFIG_FILE="${CONFIG_DIR}/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh"
+CONFIG_FILE="${HS_LANDER_PROFILE_FILE:-${CONFIG_DIR}/${HS_LANDER_ACCOUNT}/${HS_LANDER_PROJECT}.sh}"
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "ERROR: Project config file not found: $CONFIG_FILE" >&2
   echo "Expected at \$HS_LANDER_CONFIG_DIR/<account>/<project>.sh (default ~/.config/hs-lander/) per the two-tier config layout." >&2
   exit 1
 fi
+
+# Pre-mutation backup of the project profile. Backups live in a sibling
+# .profile-backups/ directory inside the account directory (dot prefix keeps
+# projects-list.sh's *.sh glob from picking them up). Backup failure is
+# advisory — never blocks the deploy.
+PROFILE_BACKUP_DIR="${HS_LANDER_PROFILE_BACKUP_DIR:-${CONFIG_DIR}/${HS_LANDER_ACCOUNT}/.profile-backups}"
+bash "$SCRIPT_DIR/backup-file.sh" "$CONFIG_FILE" "$PROFILE_BACKUP_DIR" || \
+  echo "WARNING: profile backup failed; proceeding with post-apply" >&2
 
 # Update (or append) a KEY=VALUE assignment in $file.
 #

@@ -74,7 +74,9 @@ terraform -chdir=terraform/modules/landing-page validate
 ```bash
 npm run preflight   # validate config/credential/API/DNS before build/deploy
 npm run build       # src/ → dist/ with token substitution
-npm run setup       # build + terraform apply
+npm run plan        # plan-review.sh — emits PLAN_* contract + PLAN_REVIEW=ok|confirm (v1.9.0)
+npm run apply       # tf.sh apply — consumes saved plan file; backs up state first (v1.9.0)
+npm run setup       # build + plan-review + apply (chained, v1.9.0)
 npm run post-apply  # terraform outputs → ~/.config/hs-lander/<account>/<project>.sh
 npm run deploy      # build + upload dist/ to HubSpot
 npm run watch       # build + poll for changes
@@ -100,7 +102,9 @@ hs-lander/
 │   ├── watch.sh             ← build + poll for changes
 │   ├── post-apply.sh        ← terraform outputs → project.config.sh
 │   ├── preflight.sh         ← PREFLIGHT_<NAME>=<state> lines covering tools, config, credential, API, scopes, DNS, email DNS
-│   ├── tf.sh                ← Keychain → TF_VAR_* → terraform
+│   ├── tf.sh                ← Keychain → TF_VAR_* → terraform; v1.9.0 `apply` verb requires a saved plan file
+│   ├── plan-review.sh           ← v1.9.0 — terraform plan -out + structured PLAN_*/PLAN_REVIEW/PLAN_REVIEW_SEVERITY
+│   ├── backup-file.sh           ← v1.9.0 — timestamped LRU backups; used by tf.sh apply + post-apply.sh
 │   ├── hs-curl.sh           ← Keychain → curl HubSpot API
 │   ├── version.sh               ← FRAMEWORK_VERSION=<value> from ../VERSION
 │   ├── upgrade-project-scripts.sh ← Refresh a project's scripts/ from a newer framework install (v1.7.1)

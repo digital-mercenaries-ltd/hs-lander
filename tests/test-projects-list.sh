@@ -73,4 +73,18 @@ assert_equal "$exit6" "1" "exit 1 on 'a/b' account name (slash rejected)"
 assert_file_contains "$TMP5/log6" "ACCOUNT_STATUS=error invalid-account-name" "invalid-account-name error for slash"
 rm -rf "$TMP5"
 
+# --- Scenario 6: .profile-backups/ ignored (v1.9.0 regression) ---
+echo ""
+echo "--- Scenario 6: .profile-backups/ excluded from project list ---"
+TMP6=$(mktemp -d)
+mkdir -p "$TMP6/dml/.profile-backups"
+echo 'HUBSPOT_PORTAL_ID="1"' > "$TMP6/dml/config.sh"
+echo 'PROJECT_SLUG="heard"' > "$TMP6/dml/heard.sh"
+# Plant a backup file that would match *.sh if the glob were broader
+echo 'old' > "$TMP6/dml/.profile-backups/heard.sh.2026-04-22T14-30-22Z"
+exit6b=$(run "$TMP6" dml "$TMP6/log" || true)
+assert_equal "$exit6b" "0" "exit 0 with .profile-backups present"
+assert_equal "$(cat "$TMP6/log")" "PROJECTS=heard" ".profile-backups not listed as a project"
+rm -rf "$TMP6"
+
 test_summary
