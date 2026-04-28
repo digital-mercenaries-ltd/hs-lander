@@ -51,6 +51,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | R18 | Embedded-Survey-Form Alternative (Path A) Coaching | TBD (skill-only) | Deferred — Path B is v1.8.0's design contract |
 | R19 | Tier-Classifier Verification (Pro / Ent rows + NA1 / APAC SPF includes) | TBD (1.x) | Pending portal access at relevant tiers/regions |
 | R20 | Interface (Output Contract) Normalisation across all scripts | v2.0 | Breaking-change — coordinated skill release required |
+| R21 | Project Git/GitHub Bootstrap + Identity Verification | TBD (1.10 or 2.0) | Planned; plan pending |
 | M | Maintainer Tooling (Terraform MCP, CONTRIBUTING.md) | — (non-versioned) | Living recommendation |
 
 ## Shipped (for cross-reference)
@@ -74,6 +75,7 @@ Why separate: we don't always know at roadmap-entry time whether an item will be
 | v1.8.0 | (survey-funnel completeness and email-DNS preflight) | Survey schema extensions: `survey_fields[].type ∈ {single_line_text, dropdown, multiple_checkboxes, radio}` with `options` and `other_overflow`; `custom_properties[].type ∈ {string, enumeration, bool, number}`. New scaffold JS: `survey-submit.js` (URL-param email + Forms Submissions API + "Other" overflow reveal/collect). Capture form `postSubmitAction` defaults to `redirect_url` with `{{email}}` merge token (overrideable via new `capture_post_submit_action_override`). Auto-added `<slug>_survey_completed` boolean when `include_survey = true`. New `PREFLIGHT_EMAIL_DNS` preflight emit (typed `dig CNAME`, region-aware SPF include, mechanism-order check, DKIM CNAME presence, DMARC warn-only). Schema-alignment test in `tests/test-deployment.sh` (static form names ↔ HubSpot form names ↔ `custom_properties` names three-way diff — closes the "static form looks fine but submits nowhere because field names drifted" silent-failure mode). New reference docs: `references/forms-submissions-api.md`, `references/email-auth-dns.md` (with regional SPF table). Tier-classifier Starter row marked verified. EU1 SPF include verified; NA1 placeholder pending portal access. |
 | v1.8.1 | — | Patch — twelve review-and-deploy defects from three independent sources (codex code review, architectural review, Heard v1.8.0 deploy session) plus documentation re-sync. Highlights: scaffold module pin bumped from stuck `?ref=v1.6.0`; scaffold root vars (`email_reply_to`, `email_preview_text`, `auto_publish_welcome_email`, `capture_post_submit_action_override`) wired through; `EMAIL_REPLY_TO` made reachable end-to-end (was dead code in v1.8.0); `account-setup/.terraform.lock.hcl` regenerated against `~> 2.0`; new `scripts/lib/validate-name.sh` shared regex sourced by five config-touching scripts; `post-apply.sh` honours `HS_LANDER_CONFIG_DIR` + append-if-missing; `build.sh` sed-escapes replacement values; CI shellcheck recurses into `scripts/lib/`; `docs/framework.md` + `CLAUDE.md` + `README.md` re-synced. Plus three Heard-deploy-surfaced API contract fixes: B1 (`dropdown` fieldType corrected from informed-guess `single_line_text`), B2 (`bool` properties emit canonical `True/False` options array), B5 (`survey_form depends_on custom_property` eliminates two-pass apply). Non-breaking — `terraform plan` no-op for v1.8.0 state. B3 (welcome-email PATCH against published state) explicitly deferred; stub plan written. |
 | v1.9.0 | R20 (interface normalisation — promoted to first-class roadmap item but design deferred to v2.0) | Minor — five-component bundle from the v1.9.0 master plan. (1) **Safety pair:** new `scripts/plan-review.sh` + `scripts/backup-file.sh`; `tf.sh apply` verb requires saved plan file + always backs up state; `npm run setup` chains plan-review→apply (no longer auto-approve). New emit prefixes `PLAN_REVIEW`, `PLAN_*`, `APPLY`, `BACKUP`. (2) **`scripts/lib/` consolidation:** four shared lib helpers (`sed-portable.sh`, `source-vars.sh`, `keychain.sh` xtrace-safe with three-state `found`/`missing`/`empty`, extended `validate-name.sh`); xtrace suppression now uniform across `tf.sh` / `hs-curl.sh` / `upload.sh` / `preflight.sh`. (3) **`preflight.sh` decomposition:** ~720 lines → 137-line thin runner + 16 check files under `scripts/preflight.d/` with stable numeric ordering; output contract preserved verbatim. (4) **B3 — welcome-email PATCH against published state:** single-line `update_path` swap (`/marketing/v3/emails/{id}` → `/marketing/v3/emails/{id}/draft`) — Heard's `-target=` and manual-unpublish workarounds obsolete. Probes (2026-04-27) found HubSpot's `/draft` sub-resource is editable on both draft and published parents; original "wrap with terraform_data orchestration" design was discarded. (5) **v1.8.1 review carryovers:** `PREFLIGHT_EMAIL_REPLY_TO` observability line (preflight contract 16 → 17 lines), property type allow-list validation (plan-time errors instead of HubSpot 400 at apply), `_update_field` atomic-write refactor in `post-apply.sh`, comment rot cleanup. Test count 420 → 660+. Non-breaking; new emit prefixes tracked under R20 for v2.0 unification. |
+| v1.9.2 | — | Patch — three layered protections against accidental destruction of the portal-shared `project_source` CRM property. (1) **Terraform `lifecycle { prevent_destroy = true }`** on `restapi_object.project_source_property` in `account-setup/main.tf`. Any plan that would destroy or replace it now fails at plan time; genuine portal retirement requires explicitly removing the block. (2) **`PLAN_REVIEW_SEVERITY=portal-shared`** new severity tier in `scripts/plan-review.sh`, escalating above `destructive`. Triggered by `endswith` match on a fully-qualified address allowlist (initial entry: `restapi_object.project_source_property`); suffix-anchored to prevent substring false positives. (3) **`PLAN_REVIEW_PORTAL_SHARED=<csv>`** new optional contract line listing matching addresses; emitted only when severity is `portal-shared`. Plus defensive validation rejecting empty allowlist / empty-string entries, and a test seam (`HS_LANDER_PORTAL_SHARED_OVERRIDE`) for provider-free testing. New `tests/test-prevent-destroy.sh` (4 assertions, wired into `safety-pair-tests` CI job) + `tests/test-plan-review.sh` extended 21 → 37 assertions (portal-shared escalation, gating, substring-not-suffix rejection, multi-needle iteration, portal-shared/destructive coexistence). Non-breaking; `VERSION.compat` unchanged. |
 | v1.9.1 | R9 (operator ergonomics — closed) | Patch — five additive operator-ergonomics fixes from the v1.9.1 plan. (1) **`PREFLIGHT_VERSION_DRIFT`** new check at `scripts/preflight.d/05-version-drift.sh` — surfaces project-pin-vs-installed-framework drift at preflight time; closes the v1.8.1 scaffold-pin recurrence path. Preflight contract grows 17 → 18 lines. (2) **`scripts/migrate-project.sh`** — sanctioned multi-version migration helper backed by `scripts/lib/migration-rules.sh`. Plan-only by default; `--apply` writes changes atomically (tempfile + mv). Initial rules cover v1.6.0 → v1.9.1 in five one-version steps. (3) **`scripts/projects-describe.sh`** — structured-output equivalent of `Read`-ing a project profile; mirrors `accounts-describe.sh`'s contract for the 14 keys in `set-project-field.sh`'s `ALLOWED_KEYS`. (4) **`tests/test-scaffold-terraform-plan.sh`** — exercises `scaffold/terraform/main.tf` rather than `tests/fixtures/`. Catches scaffold-root drift like v1.8.1's stuck `?ref=v1.6.0`; the scaffold-pin assertion against `VERSION` ensures the two stay in lock-step on every release. (5) **`VERSION.compat`** new file at the repo root + `docs/version-compat.md` documenting bump rules. Test count 611 → 706. Non-breaking. |
 
 ---
@@ -660,6 +662,109 @@ This roadmap entry promotes the topic from "an unnumbered sub-bullet of the v2.0
 3. Identify which scripts need backwards-compatible shims for v1.x → v2.0 transition (e.g. emit both old and new lines for one release before retiring).
 4. Coordinate the v2.0 framework cut with a matching skill release that flips parser expectations.
 5. Document the new contract in `docs/framework.md` as a first-class section so future scripts have a template.
+
+---
+
+## R21: Project Git/GitHub Bootstrap + Identity Verification
+
+**Current state (2026-04-28):** the framework and skill are essentially silent on git/GitHub at the project level.
+
+- Framework: `scaffold/.gitignore` ships in the scaffold (covers `project.config.sh`, `dist/`, terraform state, plan files). `preflight.d/99-tools-optional.sh` lists `git` as an optional tool. No script does `git init`, `git status`, or any check on the project directory.
+- Skill: Step 0 bootstrap checks that `$FRAMEWORK_HOME` is a git repo (the framework clone, not the project). Operating-rules table permits content-scoped local git ops; `git push` is treated as confirmation-gated. Step 11 final touches says "Commit + push — commit project files. If a git remote is configured, offer to push." This is the only place the project's git state is touched, and it's at the very end of the workflow.
+
+**Gaps surfaced in conversation (2026-04-28, post-v1.9.2 ship):**
+
+1. No check whether the project dir is a git repo at scaffold time. The shipped `.gitignore` is dead weight if it isn't.
+2. No `git init` suggestion. The skill silently scaffolds whether or not version control exists.
+3. No pre-apply snapshot suggestion. The v1.9.2 risk audit (turn 2389 of `s3-hs-lander-skill-build`) explicitly named "pre-apply git snapshot" as backup option 3; v1.9.0's `backup-file.sh` covers `terraform.tfstate` + project profile but not the project dir / `src/` / `brief.md` / scaffolded HubL templates.
+4. No uncommitted-changes check. Re-running scaffold or apply on an existing dirty tree could clobber unsaved work without warning.
+5. No GitHub remote handling — no `gh repo create`, no suggestion to publish, no recovery path independent of the local machine.
+6. No identity verification:
+   - **Local git identity** — `git config user.email` / `user.name`, repo-scope can override global.
+   - **Active GitHub auth** — `gh auth status`; gh supports multiple accounts via `gh auth switch`.
+   - **Target owner** — implicit today; defaults to whichever account `gh` happens to be logged into. A project meant for `digital-mercenaries-ltd` could land in the operator's personal account silently.
+7. No repo-existence check before creation — a `gh repo create <slug>` would 422 on collision; user gets no guidance about whether the existing repo is the same project (use it) or a name conflict (pick a different slug).
+
+**Goal:** make the skill explicitly aware of the project's git/GitHub state at three points (scaffold, pre-apply, final touches), surface identity facts up front, and offer the right action without taking shared-state actions silently.
+
+**Design — two pieces:**
+
+### 1. Account-profile schema extension (framework)
+
+Add four optional fields to `set-project-field.sh`'s `ALLOWED_KEYS`. These live at the **account** level (not the project) because they're identity facts about who's running deployments for that HubSpot portal:
+
+- `GITHUB_ORG` — default owner for new project repos (e.g. `digital-mercenaries-ltd`). If unset, the skill asks per project.
+- `GITHUB_VISIBILITY` — default `private`. `public` requires explicit account-level opt-in.
+- `GIT_USER_EMAIL` — optional per-account commit identity. If set, the skill applies it at repo-scope (`git config user.email …` inside the project dir, never globally).
+- `GIT_USER_NAME` — same pattern.
+
+Plus a tightening of `accounts-init.sh` to optionally accept these on creation (current accounts add them via `set-project-field.sh` after the fact — but `set-project-field.sh` operates on project profiles, not account profiles, so this needs an `accounts-set-field.sh` companion or a one-off extension to `accounts-init.sh` accepting an `--update` flag).
+
+### 2. New framework script `scripts/github-context.sh`
+
+Read-only structured-output contract, mirroring `accounts-describe.sh`'s shape:
+
+```
+GITHUB_AUTH_STATUS=ok|missing|multiple
+GITHUB_AUTH_USER=<active gh login>
+GITHUB_AUTH_ACCOUNTS=<csv when multiple>
+GIT_USER_EMAIL_LOCAL=<repo-scope value or unset>
+GIT_USER_EMAIL_GLOBAL=<global value>
+GIT_USER_EMAIL_EXPECTED=<from account profile, or empty>
+GIT_USER_NAME_LOCAL=<...>
+GIT_USER_NAME_GLOBAL=<...>
+GIT_USER_NAME_EXPECTED=<...>
+GITHUB_OWNER_TARGET=<resolved owner: GITHUB_ORG from profile, or AUTH_USER fallback>
+GITHUB_REPO_EXISTS=yes|no <owner>/<slug>
+GITHUB_REPO_URL=<when exists>
+GITHUB_CONTEXT=ok|warn|error <reason>
+```
+
+Sandbox-friendly: respects `HS_LANDER_CONFIG_DIR`; `gh` is the only external dep; tests can mock by setting `HS_LANDER_GH_BIN=/path/to/mock-gh`.
+
+### 3. Skill flow
+
+**Step 4 (scaffold) — augmented:**
+
+1. Run `git rev-parse --is-inside-work-tree` on `$PROJECT_DIR`.
+2. Run `bash $FRAMEWORK_HOME/scripts/github-context.sh <account> <slug>`.
+3. Branch on `is-inside-work-tree`:
+   - **Yes + clean** → carry on.
+   - **Yes + dirty** → list uncommitted files; offer to commit the scaffold output as one atomic commit before proceeding.
+   - **No** → offer `git init` plus an initial commit. Don't force; explain the value (pre-apply snapshot, recovery path).
+4. Branch on the GitHub contract:
+   - `GITHUB_AUTH_STATUS=multiple` → list accounts, ask which to use; do NOT silently pick. Surface `gh auth switch` as the manual fix — don't run it.
+   - `GIT_USER_EMAIL_EXPECTED` set and disagrees with `LOCAL`/`GLOBAL` → ask before applying repo-scope override. Apply with `git config user.email` in the project dir only.
+   - `GITHUB_REPO_EXISTS=yes` → "A repo already exists at `<owner>/<slug>`. Do you want to (a) use it as the remote, (b) pick a different slug, (c) skip remote setup?" Don't auto-add the remote; that's a shared-state action.
+   - `GITHUB_REPO_EXISTS=no` → "Create a new repo `<owner>/<slug>` (visibility: `private`)? `[y/n/different name/different owner]`". On confirm, run `gh repo create <owner>/<slug> --private --source=. --push`.
+
+**Step 8 (pre-apply) — encourage a snapshot commit.** If the working tree is dirty, surface it; recommend committing before confirming the plan-review gate. Especially load-bearing for `PLAN_REVIEW_SEVERITY=portal-shared|destructive`.
+
+**Step 11 (final touches) — promote remote suggestion.** Currently passive ("if remote configured, offer to push"). Add the no-remote branch handled at Step 4. Step 11 only fires the push.
+
+**Hard constraints:**
+
+- **Never run `gh auth switch` ourselves.** Auth state is global and shared with other tools. Surface the command; let the operator run it.
+- **Never change global `git config`.** Repo-scope only, and only after explicit confirmation.
+- **Never create a public repo by default.** `private` unless `GITHUB_VISIBILITY=public` is in the account profile or the user explicitly opts in.
+- **Never push without confirmation.** `gh repo create --push` is a confirmation-gated action, not silent.
+- **Never auto-add a remote to an existing repo.** Existing remotes belong to the user's prior intent.
+
+**Out of scope:**
+
+- CI/CD wiring with GitHub Actions. R11 (CI/CD with GitHub Secrets) covers that and depends on this item being shipped first.
+- Switching the skill to use signed commits. If a user has commit signing configured, repo-scope `user.signingkey` should be applied alongside the email/name override; otherwise leave alone.
+- Cross-platform (Linux/Windows) gh / git behaviour. macOS-only for now; revisit when a Linux contributor needs it.
+- GitHub Enterprise. The `GITHUB_OWNER_TARGET` resolution assumes github.com; gh supports `--hostname` for GHES but the skill doesn't model multi-host today.
+
+**Targeted release decision:**
+
+- **v1.10 (additive minor)** if the schema extension stays additive — new optional fields on the account profile, no contract change to existing scripts. The skill ships a coordinated update at the same time. Plausible if the work fits in a single sprint.
+- **v2.0 (breaking-bundle)** if the schema extension needs `accounts-init.sh` arg changes that break the existing positional-arg contract, OR if it pairs naturally with R12 (Account Profile Sync) which is already v2.0-bound. This is the safer default given the surface area.
+
+Recommend v2.0; revisit if the work scopes smaller during plan authorship.
+
+**Trigger to write the plan:** first deployment to a non-DML organisation, OR first time a user runs the skill in a non-repo project directory and feels the gap. Whichever fires first.
 
 ---
 
