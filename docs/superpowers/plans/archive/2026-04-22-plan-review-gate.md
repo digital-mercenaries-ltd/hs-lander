@@ -1,7 +1,7 @@
 # Plan: Pre-Apply Plan Review Gate
 
 **Date:** 2026-04-22
-**Status:** Pending
+**Status:** Complete (shipped in v1.9.0 Component 1, 2026-04-28)
 **Scope:** Framework. Inserts a mandatory plan-review step between `terraform plan` and `terraform apply`, with structured output that lets the skill (or a human) surface the change set before any apply executes.
 **Companion plan:** `2026-04-22-backup-state-and-profiles.md` — backup before apply. These two plans together close the "skill loop could destroy/duplicate resources" exposure. They're independent and can land in either order.
 

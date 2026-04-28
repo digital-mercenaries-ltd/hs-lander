@@ -1,7 +1,7 @@
 # Plan: Backup Terraform State and Project Profiles Before Apply
 
 **Date:** 2026-04-22
-**Status:** Pending
+**Status:** Complete (shipped in v1.9.0 Component 1, 2026-04-28)
 **Scope:** Framework. Adds timestamped backups of both Terraform state and the project profile before every apply path, giving a short-term rollback window after any unwanted change.
 **Companion plan:** `2026-04-22-plan-review-gate.md` — pre-apply review. These two plans together close the "skill loop could destroy/duplicate resources" exposure. Independent; can land in either order.
 
