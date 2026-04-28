@@ -24,10 +24,7 @@ Plans written and reviewed; implementation not yet started.
 
 | Plan | Depends on | Likely target release |
 |---|---|---|
-| 2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md | v1.8.1 shipped; B3 sub-component depends on live-portal probe | v1.9.0 (next minor) |
-| 2026-04-27-welcome-email-published-state-handling.md (B3) | v1.8.1 shipped; folded into v1.9.0 plan as Component 4 — kept here for the standalone problem statement and design candidates | v1.9.0 (or v1.9.1 if probes contradict design) |
-| 2026-04-22-plan-review-gate.md | v1.8.1 shipped; folded into v1.9.0 plan as Component 1 — kept here verbatim because v1.9.0 plan composes it without re-deciding | v1.9.0 |
-| 2026-04-22-backup-state-and-profiles.md | v1.8.1 shipped; folded into v1.9.0 plan as Component 1 — kept here verbatim because v1.9.0 plan composes it without re-deciding | v1.9.0 |
+| (none) | | |
 
 ### Pending — to be written
 
@@ -36,7 +33,7 @@ Concrete work scoped but no plan file yet. Listed here so plan authors know what
 | Plan | Likely target release | Notes |
 |---|---|---|
 | v1.9.1 ergonomics (R9 sub-items 2 + 3, scaffold-to-plan test, VERSION.compat) | v1.9.1 | Operator ergonomics + test pyramid widening. The version-drift warning systematically prevents the recurrence of v1.8.1's scaffold-pin defect. |
-| v2.0 breaking changes (R5 main + scope auto-discovery, output-contract normalisation, migration consolidation) | v2.0 | Major-version cut; multiple breaking-candidate items already noted in roadmap. |
+| v2.0 breaking changes (R5 main + scope auto-discovery, R20 — interface normalisation, migration consolidation) | v2.0 | Major-version cut; multiple breaking-candidate items already noted in roadmap. |
 
 ### Complete (archived)
 
@@ -64,6 +61,10 @@ Plans that have shipped and are reflected in the framework source. Files moved t
 | `archive/2026-04-27-v1.7.1-bugfixes-and-script-refresh.md` | Complete | v1.7.1 |
 | `archive/2026-04-27-v1.8.0-survey-schema-and-email-dns.md` | Complete | v1.8.0 |
 | `archive/2026-04-27-v1.8.1-codex-review-fixes.md` | Complete | v1.8.1 |
+| `archive/2026-04-22-plan-review-gate.md` | Complete | v1.9.0 (Component 1) |
+| `archive/2026-04-22-backup-state-and-profiles.md` | Complete | v1.9.0 (Component 1) |
+| `archive/2026-04-27-welcome-email-published-state-handling.md` | Complete (design revised post-probe to one-line `update_path` swap) | v1.9.0 (Component 4) |
+| `archive/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md` | Complete (master plan composing all five components) | v1.9.0 |
 
 ### Superseded (archived)
 

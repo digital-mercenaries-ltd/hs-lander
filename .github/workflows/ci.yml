@@ -117,3 +117,30 @@ jobs:
 
       - name: Run test-keychain-lib.sh
         run: bash tests/test-keychain-lib.sh
+
+  preflight-decomposition-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run test-preflight-decomposition.sh
+        run: bash tests/test-preflight-decomposition.sh
+
+  safety-pair-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7"
+
+      - name: Run test-plan-review.sh
+        run: bash tests/test-plan-review.sh
+
+      - name: Run test-backup-file.sh
+        run: bash tests/test-backup-file.sh
+
+      - name: Run test-tf.sh
+        run: bash tests/test-tf.sh

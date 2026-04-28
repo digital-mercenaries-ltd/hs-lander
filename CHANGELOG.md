@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.9.0 (2026-04-28)
+
+Minor release. Five-component bundle from the [v1.9.0 master plan](docs/superpowers/plans/archive/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md): pre-apply plan-review gate, timestamped state/profile backups, `scripts/lib/` consolidation, `preflight.sh` decomposition into `scripts/preflight.d/`, B3 welcome-email PATCH against published state, plus six v1.8.1 review carryovers. Test count 420 → 660+ across 22 test files; output contracts preserved verbatim except for additive new lines (`PREFLIGHT_EMAIL_REPLY_TO`, plus the safety pair's `PLAN_REVIEW`, `PLAN_*`, `APPLY`, `BACKUP` prefixes).
+
+### Component 1 — Safety pair (plan-review gate + state/profile backups)
+
+- **`scripts/plan-review.sh`** runs `terraform plan -out=<file>`, parses the JSON via `jq`, emits a stable-order contract: `PLAN_CREATE`, `PLAN_UPDATE`, `PLAN_DELETE`, `PLAN_REPLACE`, `PLAN_RESOURCES` (JSON), `PLAN_FILE`, `PLAN_REVIEW=ok|confirm`, and (when `confirm`) `PLAN_REVIEW_SEVERITY=info|caution|destructive`. Thresholds: 50 creates (`HS_LANDER_MAX_CREATE`), 100 updates (`HS_LANDER_MAX_UPDATE`), 0 destroys, 0 replaces. Highest severity wins. Gate is advisory — exit 0 always when the plan succeeds.
+- **`scripts/backup-file.sh`** generic timestamped-backup helper with LRU retention. Default keep is 20; override via `HS_LANDER_BACKUP_KEEP`.
+- **`scripts/tf.sh apply`** verb — requires a saved plan file; refuses with `APPLY=error plan-file-missing` otherwise. Always backs up `terraform/terraform.tfstate` to `terraform/state-backups/` before apply (including under the escape hatch `HS_LANDER_UNSAFE_APPLY=1`).
+- **`scripts/post-apply.sh`** profile-backup pre-mutation copy to `.profile-backups/` (dot-prefixed so `projects-list.sh`'s glob ignores it).
+- **Scaffold updates** — `npm run plan`, `npm run apply`; `npm run setup` chains `build → plan-review → apply`. `.gitignore` ignores `terraform/state-backups/` and `.hs-lander-plan.bin`.
+
+### Component 2 — `scripts/lib/` consolidation
+
+Four shared lib helpers extracted from inlined patterns: `sed-portable.sh` (`sed_inplace`, `sed_escape_replacement`), `source-vars.sh` (`source_vars`, `extract_var_via_parse`), `keychain.sh` (`keychain_read` with xtrace suppression and three-state outcome — `found` / `missing` / `empty`), `validate-name.sh` (extended with arg-count + `${1:-}` defensive guards). Sourced from 10+ consumer scripts; closes the v1.8.1 plan's deferred xtrace-suppression item across `tf.sh` / `hs-curl.sh` / `upload.sh` / `preflight.sh`.
+
+### Component 3 — `preflight.sh` decomposition
+
+`scripts/preflight.sh` shrunk from ~720 lines to a 137-line thin runner. Logic split across 16 check files under `scripts/preflight.d/` with numeric prefixes (`00-tools-required.sh` → `99-tools-optional.sh`). Each file owns one `PREFLIGHT_*` line; shared variables documented in `preflight.d/README.md`. Output contract preserved verbatim — `tests/test-preflight.sh` (184 assertions) passes against the decomposed runner unchanged. New `tests/test-preflight-decomposition.sh` (14 assertions) asserts the decomposition properties: removing a check file drops exactly its line, missing/empty `preflight.d/` causes the runner to refuse with exit 2, ordering is stable.
+
+### Component 4 — B3 welcome-email PATCH against published state
+
+Single-line `update_path` swap on `restapi_object.welcome_email`: `/marketing/v3/emails/{id}` → `/marketing/v3/emails/{id}/draft`. HubSpot's `/draft` sub-resource is editable on both `AUTOMATED_DRAFT` and `AUTOMATED` (published) parents — verified via live-portal probes (DML/Heard portal 147959629, 2026-04-27, see `references/hubspot-api-quirks.md`). Heard's interim workarounds (`terraform apply -target=` excluding the email, manual UI unpublish before each apply) are obsolete. The original B3 stub plan's heavier `terraform_data` orchestration was discarded as unnecessary post-probe.
+
+### Component 5 — v1.8.1 review carryovers
+
+- **`PREFLIGHT_EMAIL_REPLY_TO`** observability line (`set <address>` / `fallback <DOMAIN>` / `skipped <reason>`) so operators can see which domain `PREFLIGHT_EMAIL_DNS` actually probed. Preflight contract grows from 16 to 17 lines.
+- **Property type allow-list validation** on the `custom_properties` and `survey_fields` module variables — surfaces unsupported types at plan time instead of a HubSpot 400 at apply.
+- **Comment rot cleanup** — Heard / version-specific attribution stripped from three terraform comments; technical rationale preserved.
+- **`_update_field` atomic-write refactor** — `post-apply.sh` now uses tempfile + atomic-mv with EXIT trap, mirroring `set-project-field.sh`. A SIGINT mid-run leaves the live profile byte-identical.
+
+### New emit prefixes
+
+`PLAN_REVIEW`, `PLAN_REVIEW_SEVERITY`, `PLAN_*` (CREATE/UPDATE/DELETE/REPLACE/RESOURCES/FILE), `APPLY`, `BACKUP`, `PREFLIGHT_EMAIL_REPLY_TO`. Tracked under [R20 — Interface (Output Contract) Normalisation](docs/roadmap.md#r20-interface-output-contract-normalisation-across-all-scripts) (deferred to v2.0); shipped verbatim per the component plans.
+
+### Migration
+
+`npm run setup` is no longer an auto-approve apply — it now chains plan-review and apply. Existing projects upgrading via `upgrade-project-scripts.sh` should re-pin `?ref=v1.9.0` in `terraform/main.tf` and refresh `package.json` from the scaffold. Direct CLI users on `confirm` plans should split into `npm run plan` + `npm run apply`.
+
+For Heard specifically: B1, B2, B5 fixes already in place from v1.8.1; B3's `update_path` change is transparent (no resource graph diff). The `terraform apply -target=` workaround for welcome_email is no longer needed.
+
+### Cross-references
+
+- Master plan: `docs/superpowers/plans/archive/2026-04-27-v1.9.0-safety-lib-preflight-and-b3.md`
+- Component plans: `archive/2026-04-22-plan-review-gate.md`, `archive/2026-04-22-backup-state-and-profiles.md`, `archive/2026-04-27-welcome-email-published-state-handling.md`
+- Pull requests: #25 (master plan), #26 (Component 2), #27 (R20), #28 (Component 5), #29 (Component 1), #30 (Component 3), #31 (B3 references), #32 (Component 4 / B3 implementation)
+
 ## v1.8.1 (2026-04-27)
 
 Patch release. Twelve surgical fixes from three independent reviews of v1.8.0 (codex code review, architectural review, Heard v1.8.0 deploy session) plus a documentation re-sync. No module input contract changes; no behaviour changes from the consumer's perspective beyond closing the dead-code paths and Starter-blocking defects the reviews surfaced. Existing v1.8.0 state plans clean.

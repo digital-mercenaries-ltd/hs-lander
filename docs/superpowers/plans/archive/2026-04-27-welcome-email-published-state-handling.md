@@ -1,8 +1,8 @@
 # Plan: Welcome-email PATCH against published state (B3)
 
 **Date:** 2026-04-27
-**Status:** Probes complete (2026-04-27) — design revised. Original "wrap restapi_object with pre/post terraform_data unpublish/republish orchestration" approach SUPERSEDED. The probe surfaced HubSpot's `/marketing/v3/emails/{id}/draft` sub-resource which accepts PATCH directly on both draft- and published-state emails. Fix collapses to a one-line `update_path` change in `emails.tf`. See `references/hubspot-api-quirks.md` "Welcome email lifecycle — published-state PATCH path (B3 probes — 2026-04-27)" for the empirical findings.
-**Scope:** Framework. Single-line change in `terraform/modules/landing-page/emails.tf::restapi_object.welcome_email` — switch `update_path` from `/marketing/v3/emails/{id}` to `/marketing/v3/emails/{id}/draft`. No module input contract changes; behaviour change is "PATCH now works against published emails" (currently fails).
+**Status:** Complete (shipped in v1.9.0 Component 4, 2026-04-28). Original stub design — wrap `restapi_object` with pre/post `terraform_data` running unpublish/republish — was superseded by the post-probe finding that HubSpot's `/marketing/v3/emails/{id}/draft` sub-resource accepts PATCH directly on both draft- and published-state emails. Fix collapsed to a one-line `update_path` change in `emails.tf`. See `references/hubspot-api-quirks.md` "Welcome email lifecycle — published-state PATCH path (B3 probes — 2026-04-27)" for the empirical findings.
+**Scope:** Framework. Single-line change in `terraform/modules/landing-page/emails.tf::restapi_object.welcome_email` — switch `update_path` from `/marketing/v3/emails/{id}` to `/marketing/v3/emails/{id}/draft`. No module input contract changes; behaviour change is "PATCH now works against published emails" (was rejected pre-fix).
 **Target release:** v1.9.0 (Component 4 of the master plan).
 **Dependency:** v1.8.1 shipped (B1, B2, B5 fixes already in place); probes against a live HubSpot portal complete.
 
