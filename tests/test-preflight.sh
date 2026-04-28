@@ -20,6 +20,7 @@ assert_file_exists "$REPO_DIR/scripts/preflight.sh" "scripts/preflight.sh exists
 PREFLIGHT_CONTRACT_KEYS=(
   PREFLIGHT_FRAMEWORK_VERSION
   PREFLIGHT_TOOLS_REQUIRED
+  PREFLIGHT_VERSION_DRIFT
   PREFLIGHT_PROJECT_POINTER
   PREFLIGHT_ACCOUNT_PROFILE
   PREFLIGHT_PROJECT_PROFILE
@@ -79,6 +80,15 @@ setup_env() {
   # preflight.sh resolves VERSION from its own script location, so this sits
   # at $dir/project/VERSION (one level up from $dir/project/scripts/).
   printf 'test-version-9.9.9\n' > "$dir/project/VERSION"
+  # Project's terraform/main.tf with a ?ref= matching VERSION — so the
+  # default scenario gets PREFLIGHT_VERSION_DRIFT=ok. Tests that need to
+  # exercise the warn or skipped paths override the file or remove it.
+  mkdir -p "$dir/project/terraform"
+  cat > "$dir/project/terraform/main.tf" <<'TF'
+module "landing_page" {
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=vtest-version-9.9.9"
+}
+TF
   printf '%s' "$dir"
 }
 
@@ -761,7 +771,7 @@ assert_file_contains "$LOGO" "^PREFLIGHT_PROJECT_POINTER=skipped (required tools
 assert_file_contains "$LOGO" "^PREFLIGHT_TOOLS_OPTIONAL=skipped (required tools missing)" "optional tools also skipped"
 assert_full_contract "$LOGO" "Scenario O"
 preflight_line_count=$(grep -c '^PREFLIGHT_' "$LOGO")
-assert_equal "$preflight_line_count" "17" "exactly 17 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 16)"
+assert_equal "$preflight_line_count" "18" "exactly 18 PREFLIGHT_* lines when required tool missing (FRAMEWORK_VERSION + 17)"
 
 # --- Scenario O2: TOOLS_REQUIRED missing — multiple tools ---
 # Two tools missing: csv list in the detail.
@@ -826,7 +836,7 @@ write_project_sourcing_chain "$TMPR"
 write_mock_bin "$TMPR"
 LOGR="$TMPR/preflight.log"
 run_preflight_capture "$TMPR" "$LOGR" >/dev/null || true
-expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_EMAIL_REPLY_TO\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
+expected_order=$'PREFLIGHT_FRAMEWORK_VERSION\nPREFLIGHT_TOOLS_REQUIRED\nPREFLIGHT_VERSION_DRIFT\nPREFLIGHT_PROJECT_POINTER\nPREFLIGHT_ACCOUNT_PROFILE\nPREFLIGHT_PROJECT_PROFILE\nPREFLIGHT_CREDENTIAL\nPREFLIGHT_API_ACCESS\nPREFLIGHT_TIER\nPREFLIGHT_SCOPES\nPREFLIGHT_PROJECT_SOURCE\nPREFLIGHT_DNS\nPREFLIGHT_DOMAIN_CONNECTED\nPREFLIGHT_EMAIL_DNS\nPREFLIGHT_EMAIL_REPLY_TO\nPREFLIGHT_GA4\nPREFLIGHT_FORM_IDS\nPREFLIGHT_TOOLS_OPTIONAL'
 actual_order=$(grep -oE '^PREFLIGHT_[A-Z0-9_]+' "$LOGR")
 assert_equal "$actual_order" "$expected_order" "PREFLIGHT_* keys appear in the documented stable order"
 
@@ -956,7 +966,75 @@ assert_equal "$exitX" "0" "exit 0 when EMAIL_REPLY_TO falls back to DOMAIN (non-
 assert_file_contains "$LOGX" "^PREFLIGHT_EMAIL_REPLY_TO=fallback testproj.example.com$" \
   "EMAIL_REPLY_TO=fallback names the DOMAIN being used"
 
+# --- Scenario Y: VERSION_DRIFT=ok when ?ref= matches installed VERSION ---
+echo ""
+echo "--- Scenario Y: VERSION_DRIFT=ok when pinned matches installed ---"
+TMPY=$(setup_env)
+write_account_config "$TMPY"
+write_project_config "$TMPY"
+write_project_sourcing_chain "$TMPY"
+write_mock_bin "$TMPY"
+LOGY="$TMPY/preflight.log"
+exitY=$(run_preflight_capture "$TMPY" "$LOGY" || true)
+assert_file_contains "$LOGY" "^PREFLIGHT_VERSION_DRIFT=ok$" \
+  "VERSION_DRIFT=ok when project's ?ref= matches installed VERSION"
+
+# --- Scenario Z: VERSION_DRIFT=warn when pinned older than installed ---
+echo ""
+echo "--- Scenario Z: VERSION_DRIFT=warn when pinned older ---"
+TMPZ=$(setup_env)
+write_account_config "$TMPZ"
+write_project_config "$TMPZ"
+write_project_sourcing_chain "$TMPZ"
+write_mock_bin "$TMPZ"
+# Override the default ?ref= to an older version
+cat > "$TMPZ/project/terraform/main.tf" <<'TF'
+module "landing_page" {
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.6.0"
+}
+TF
+LOGZ="$TMPZ/preflight.log"
+exitZ=$(run_preflight_capture "$TMPZ" "$LOGZ" || true)
+assert_equal "$exitZ" "0" "exit 0 when VERSION_DRIFT=warn (non-blocking)"
+assert_file_contains "$LOGZ" "^PREFLIGHT_VERSION_DRIFT=warn pinned=1.6.0 installed=test-version-9.9.9$" \
+  "VERSION_DRIFT=warn names both pinned and installed versions"
+
+# --- Scenario AA: VERSION_DRIFT=skipped when terraform/main.tf missing ---
+echo ""
+echo "--- Scenario AA: VERSION_DRIFT=skipped when terraform/main.tf missing ---"
+TMPAA=$(setup_env)
+write_account_config "$TMPAA"
+write_project_config "$TMPAA"
+write_project_sourcing_chain "$TMPAA"
+write_mock_bin "$TMPAA"
+rm -rf "$TMPAA/project/terraform"
+LOGAA="$TMPAA/preflight.log"
+exitAA=$(run_preflight_capture "$TMPAA" "$LOGAA" || true)
+assert_equal "$exitAA" "0" "exit 0 when VERSION_DRIFT=skipped (non-blocking)"
+assert_file_contains "$LOGAA" "^PREFLIGHT_VERSION_DRIFT=skipped (terraform/main.tf not found" \
+  "VERSION_DRIFT=skipped names the missing path"
+
+# --- Scenario BB: VERSION_DRIFT=skipped when ?ref= absent from main.tf ---
+echo ""
+echo "--- Scenario BB: VERSION_DRIFT=skipped when ?ref= unparseable ---"
+TMPBB=$(setup_env)
+write_account_config "$TMPBB"
+write_project_config "$TMPBB"
+write_project_sourcing_chain "$TMPBB"
+write_mock_bin "$TMPBB"
+cat > "$TMPBB/project/terraform/main.tf" <<'TF'
+# A main.tf with no ?ref= pin (shouldn't happen with a real scaffold,
+# but test the parser's defensive branch).
+provider "restapi" {
+  uri = "https://api.hubapi.com"
+}
+TF
+LOGBB="$TMPBB/preflight.log"
+exitBB=$(run_preflight_capture "$TMPBB" "$LOGBB" || true)
+assert_file_contains "$LOGBB" "^PREFLIGHT_VERSION_DRIFT=skipped (?ref= not found" \
+  "VERSION_DRIFT=skipped when ?ref= absent from main.tf"
+
 # Extend EXIT trap to include all temp dirs created above.
-trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}" "${TMPU:-}" "${TMPV:-}" "${TMPW:-}" "${TMPX:-}"' EXIT
+trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}" "${TMP4:-}" "${TMP5:-}" "${TMP6:-}" "${TMPF:-}" "${TMPG:-}" "${TMPH:-}" "${TMPE:-}" "${TMPK:-}" "${TMPA:-}" "${TMPB:-}" "${TMPC:-}" "${TMPD:-}" "${TMPI:-}" "${TMPJ:-}" "${TMPL:-}" "${TMPM:-}" "${TMPN:-}" "${TMPN2:-}" "${TMPO:-}" "${TMPO2:-}" "${TMPP:-}" "${TMPQ:-}" "${TMPR:-}" "${TMPS:-}" "${TMPT:-}" "${TMPU:-}" "${TMPV:-}" "${TMPW:-}" "${TMPX:-}" "${TMPY:-}" "${TMPZ:-}" "${TMPAA:-}" "${TMPBB:-}"' EXIT
 
 test_summary

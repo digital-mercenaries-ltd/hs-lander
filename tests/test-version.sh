@@ -38,4 +38,23 @@ printf '  2.5.0  \n\n' > "$TMP/VERSION"
 out=$(bash "$TMP/scripts/version.sh")
 assert_equal "$out" "FRAMEWORK_VERSION=2.5.0" "whitespace stripped, value preserved"
 
+# --- Scenario 4: VERSION.compat exists with valid format ---
+# v1.9.1 introduces VERSION.compat as the skill / framework compatibility
+# pin. The file's format is a single-line semver range; this test asserts
+# its existence and that the content matches the documented grammar.
+echo ""
+echo "--- Scenario 4: VERSION.compat exists with valid format ---"
+assert_file_exists "$REPO_DIR/VERSION.compat" "VERSION.compat exists at repo root"
+compat_value=$(tr -d '[:space:]' < "$REPO_DIR/VERSION.compat")
+# Format check: matches >=X.Y.Z,<X.Y.Z (the documented shape). Loose
+# validation — accepts any whitespace-stripped string with at least one
+# semver-shaped token. Tightening the regex risks false-positive
+# rejection for legitimate edge cases (e.g. a one-off `=X.Y.Z` pin).
+if [[ "$compat_value" =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
+  result="true"
+else
+  result="false"
+fi
+assert_equal "$result" "true" "VERSION.compat contains at least one semver-shaped token: '$compat_value'"
+
 test_summary
