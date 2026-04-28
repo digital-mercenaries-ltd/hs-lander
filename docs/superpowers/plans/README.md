@@ -24,7 +24,7 @@ Plans written and reviewed; implementation not yet started.
 
 | Plan | Depends on | Likely target release |
 |---|---|---|
-| (none) | | |
+| 2026-04-28-v1.9.1-operator-ergonomics-and-tests.md | v1.9.0 shipped | v1.9.1 (next patch) |
 
 ### Pending — to be written
 
@@ -32,7 +32,6 @@ Concrete work scoped but no plan file yet. Listed here so plan authors know what
 
 | Plan | Likely target release | Notes |
 |---|---|---|
-| v1.9.1 ergonomics (R9 sub-items 2 + 3, scaffold-to-plan test, VERSION.compat) | v1.9.1 | Operator ergonomics + test pyramid widening. The version-drift warning systematically prevents the recurrence of v1.8.1's scaffold-pin defect. |
 | v2.0 breaking changes (R5 main + scope auto-discovery, R20 — interface normalisation, migration consolidation) | v2.0 | Major-version cut; multiple breaking-candidate items already noted in roadmap. |
 
 ### Complete (archived)
