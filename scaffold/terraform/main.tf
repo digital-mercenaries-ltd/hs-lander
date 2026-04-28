@@ -79,11 +79,11 @@ variable "capture_post_submit_action_override" {
 }
 
 module "account_setup" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.9.1"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/account-setup?ref=v1.9.2"
 }
 
 module "landing_page" {
-  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.9.1"
+  source = "git::https://github.com/digital-mercenaries-ltd/hs-lander//terraform/modules/landing-page?ref=v1.9.2"
 
   hubspot_portal_id          = var.hubspot_portal_id
   project_slug               = "PROJECT_SLUG"

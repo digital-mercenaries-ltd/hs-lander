@@ -163,3 +163,6 @@ jobs:
 
       - name: Run test-tf.sh
         run: bash tests/test-tf.sh
+
+      - name: Run test-prevent-destroy.sh
+        run: bash tests/test-prevent-destroy.sh
