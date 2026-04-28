@@ -975,7 +975,7 @@ write_project_config "$TMPY"
 write_project_sourcing_chain "$TMPY"
 write_mock_bin "$TMPY"
 LOGY="$TMPY/preflight.log"
-exitY=$(run_preflight_capture "$TMPY" "$LOGY" || true)
+run_preflight_capture "$TMPY" "$LOGY" >/dev/null || true
 assert_file_contains "$LOGY" "^PREFLIGHT_VERSION_DRIFT=ok$" \
   "VERSION_DRIFT=ok when project's ?ref= matches installed VERSION"
 
@@ -1030,7 +1030,7 @@ provider "restapi" {
 }
 TF
 LOGBB="$TMPBB/preflight.log"
-exitBB=$(run_preflight_capture "$TMPBB" "$LOGBB" || true)
+run_preflight_capture "$TMPBB" "$LOGBB" >/dev/null || true
 assert_file_contains "$LOGBB" "^PREFLIGHT_VERSION_DRIFT=skipped (?ref= not found" \
   "VERSION_DRIFT=skipped when ?ref= absent from main.tf"
 

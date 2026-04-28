@@ -98,7 +98,7 @@ if [[ -f "$framework_home/CHANGELOG.md" ]]; then
 fi
 
 # Source the migration rules and run the chain.
-# shellcheck source=lib/migration-rules.sh
+# shellcheck source=/dev/null
 source "$script_dir/lib/migration-rules.sh"
 
 export _MIGRATE_PROJECT_DIR="$project_dir"
